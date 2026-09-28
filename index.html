@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Archive</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Rajdhani:wght@500;600;700&family=DM+Mono:wght@400;500&display=swap');
+
+  :root{
+    /* palette — an old study lit by lamplight, not a black void */
+    --ink:#0e1512;         /* deep green-black, the room */
+    --ink2:#131e19;
+    --wood:#2a1d12;        /* shelf wood */
+    --wood2:#3d2a1a;
+    --brass:#c9a25e;       /* brass fittings + rules */
+    --brass-dim:#8a7040;
+    --paper:#e9e0c9;       /* aged page */
+    --lamp:#ffca7a;        /* warm lamplight */
+    --glow:#5be0c8;        /* the portal / spine glow — teal */
+    --glow2:#7c6cff;       /* secondary arcane accent */
+    --smoke:rgba(233,224,201,.55);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:
+      radial-gradient(120% 90% at 50% -10%, #1b2a24 0%, var(--ink) 55%, #080c0a 100%);
+    color:var(--paper);
+    font-family:'Cormorant Garamond',Georgia,serif;
+    overflow-x:hidden;
+    min-height:100vh;
+  }
+  /* floating dust motes in the lamplight */
+  .motes{position:fixed;inset:0;pointer-events:none;z-index:1;opacity:.5}
+  .mote{position:absolute;width:2px;height:2px;border-radius:50%;background:var(--lamp);
+    box-shadow:0 0 6px var(--lamp);animation:drift linear infinite}
+  @keyframes drift{
+    0%{transform:translateY(100vh) translateX(0);opacity:0}
+    10%{opacity:.7}
+    90%{opacity:.5}
+    100%{transform:translateY(-10vh) translateX(40px);opacity:0}
+  }
+
+  .wrap{position:relative;z-index:2;max-width:1180px;margin:0 auto;padding:54px 28px 90px}
+
+  /* ── masthead ── */
+  header{text-align:center;margin-bottom:8px;position:relative}
+  .eyebrow{font-family:'DM Mono',monospace;font-size:.72rem;letter-spacing:5px;text-transform:uppercase;
+    color:var(--brass);opacity:.85;margin-bottom:14px}
+  h1{font-size:clamp(3rem,9vw,6.2rem);font-weight:600;line-height:.92;letter-spacing:1px;
+    color:var(--paper);text-shadow:0 2px 30px rgba(0,0,0,.6)}
+  h1 .amp{color:var(--brass);font-style:italic;font-weight:500}
+  .sub{font-style:italic;font-size:1.15rem;color:var(--smoke);margin-top:14px;letter-spacing:.3px}
+  .rule{width:min(560px,80%);height:1px;margin:30px auto 6px;
+    background:linear-gradient(90deg,transparent,var(--brass-dim),var(--brass),var(--brass-dim),transparent)}
+  .rule-tag{font-family:'DM Mono',monospace;font-size:.66rem;letter-spacing:3px;color:var(--brass-dim);
+    text-align:center;text-transform:uppercase;margin-bottom:46px}
+
+  /* ── the shelf ── */
+  .shelf{position:relative;margin-bottom:54px}
+  .shelf-label{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:.82rem;letter-spacing:4px;
+    text-transform:uppercase;color:var(--brass);margin:0 0 16px 4px;display:flex;align-items:center;gap:12px}
+  .shelf-label::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--brass-dim),transparent)}
+
+  .books{
+    display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;
+    padding:26px 26px 0;position:relative;
+    background:
+      linear-gradient(180deg,transparent 0%,transparent 82%, rgba(0,0,0,.35) 100%);
+  }
+  /* the wooden plank under the books */
+  .plank{height:26px;border-radius:3px;margin:0 6px;
+    background:linear-gradient(180deg,var(--wood2),var(--wood));
+    box-shadow:0 10px 30px rgba(0,0,0,.5), inset 0 2px 0 rgba(201,162,94,.18), inset 0 -3px 8px rgba(0,0,0,.5);
+    border-top:1px solid rgba(201,162,94,.25);position:relative;z-index:3}
+
+  /* ── a book (vertical spine) ── */
+  .book{
+    --c:var(--glow);
+    position:relative;height:var(--h,210px);width:var(--w,58px);
+    border-radius:3px 5px 5px 3px;cursor:pointer;flex-shrink:0;
+    background:
+      linear-gradient(90deg, rgba(0,0,0,.45) 0%, transparent 8%, transparent 90%, rgba(0,0,0,.35) 100%),
+      linear-gradient(180deg, color-mix(in srgb, var(--c) 32%, #1a1410) 0%, color-mix(in srgb, var(--c) 20%, #120e0b) 100%);
+    box-shadow:0 14px 24px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.05);
+    transform-origin:bottom center;
+    transition:transform .34s cubic-bezier(.2,.9,.25,1.2), box-shadow .34s, filter .34s;
+    display:flex;align-items:center;justify-content:center;
+    overflow:hidden;isolation:isolate;
+  }
+  /* embossed brass bands top and bottom of the spine */
+  .book::before{content:'';position:absolute;left:0;right:0;top:16px;height:2px;
+    background:linear-gradient(90deg,transparent,var(--brass),transparent);opacity:.6}
+  .book::after{content:'';position:absolute;left:0;right:0;bottom:16px;height:2px;
+    background:linear-gradient(90deg,transparent,var(--brass),transparent);opacity:.6}
+  .spine-title{
+    writing-mode:vertical-rl;transform:rotate(180deg);
+    font-family:'Cormorant Garamond',serif;font-weight:600;font-size:1rem;letter-spacing:1.5px;
+    color:var(--paper);text-shadow:0 1px 2px rgba(0,0,0,.7);
+    padding:26px 0;white-space:nowrap;pointer-events:none;
+    max-height:100%;text-overflow:ellipsis;overflow:hidden;
+  }
+  .spine-emblem{position:absolute;top:9px;left:50%;transform:translateX(-50%);
+    font-size:.8rem;opacity:.75;pointer-events:none}
+  /* the glow that leaks from the spine on hover — the "portal" */
+  .book .portal{position:absolute;inset:0;z-index:-1;opacity:0;transition:opacity .34s;
+    background:radial-gradient(60% 45% at 50% 50%, color-mix(in srgb,var(--c) 75%, transparent), transparent 70%);
+    filter:blur(4px)}
+  .kind{position:absolute;bottom:7px;left:50%;transform:translateX(-50%);
+    font-family:'DM Mono',monospace;font-size:.5rem;letter-spacing:1px;text-transform:uppercase;
+    color:var(--c);opacity:0;transition:opacity .3s;white-space:nowrap;text-shadow:0 0 6px var(--c)}
+
+  .book:hover{
+    transform:translateY(-22px) rotate(-2deg);
+    box-shadow:0 30px 44px rgba(0,0,0,.6), 0 0 34px -6px var(--c), inset 0 0 0 1px color-mix(in srgb,var(--c) 40%,transparent);
+    filter:saturate(1.15);
+  }
+  .book:hover .portal{opacity:.9}
+  .book:hover .kind{opacity:1}
+  .book:hover .spine-title{color:#fff}
+  .book:focus-visible{outline:2px solid var(--glow);outline-offset:3px}
+  .book:active{transform:translateY(-14px) rotate(-1deg) scale(.99)}
+
+  /* a leaning gap-filler book for character */
+  .book.lean{transform:rotate(4deg);align-self:flex-end}
+  .book.lean:hover{transform:translateY(-20px) rotate(1deg)}
+
+  /* ── footer plate ── */
+  .plate{margin-top:46px;text-align:center;font-family:'DM Mono',monospace;
+    font-size:.68rem;letter-spacing:2px;color:var(--brass-dim);text-transform:uppercase}
+  .plate a{color:var(--brass);text-decoration:none;border-bottom:1px dotted var(--brass-dim)}
+
+  /* a soft vignette so the room has edges */
+  .vignette{position:fixed;inset:0;pointer-events:none;z-index:3;
+    box-shadow:inset 0 0 220px 40px rgba(0,0,0,.7)}
+
+  /* the reading lamp glow up top */
+  .lamp-glow{position:fixed;top:-160px;left:50%;transform:translateX(-50%);
+    width:640px;height:420px;border-radius:50%;pointer-events:none;z-index:1;
+    background:radial-gradient(closest-side, rgba(255,202,122,.16), transparent 70%);}
+
+  @media (max-width:640px){
+    .wrap{padding:38px 16px 70px}
+    .book{--w:46px}
+    .spine-title{font-size:.86rem;letter-spacing:1px}
+    .books{gap:8px;padding:22px 14px 0}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .book,.book:hover{transition:none;transform:none}
+    .mote{display:none}
+  }
+</style>
+</head>
+<body>
+  <div class="lamp-glow"></div>
+  <div class="motes" id="motes"></div>
+
+  <div class="wrap">
+    <header>
+      <div class="eyebrow">Est. by Z. Lewis</div>
+      <h1>The <span class="amp">Archive</span></h1>
+      <div class="sub">Every book a mind you've been building. Pull one from the shelf.</div>
+      <div class="rule"></div>
+      <div class="rule-tag">— pull a book to enter —</div>
+    </header>
+
+    <div id="shelves"></div>
+
+    <div class="plate">
+      A private library &middot; <a id="cfgLink" href="#">edit the shelves</a>
+    </div>
+  </div>
+
+  <div class="vignette"></div>
+
+<script>
+/* ────────────────────────────────────────────────────────────
+   THE ARCHIVE — a launcher shelf for your AI projects.
+   Each book opens a live app or a Claude chat. Purely a front
+   door: no data, no sync. Edit BOOKS below (or use "edit shelves").
+   ──────────────────────────────────────────────────────────── */
+
+var DEFAULT_BOOKS = {
+  "Life OS": [
+    { title:"Subroutine",   kind:"app",  emblem:"◆", color:"#e8a030",
+      url:"https://zjaylewis94.github.io/SUBROUTINE/", h:230 },
+    { title:"Codex",        kind:"chat", emblem:"✦", color:"#7c6cff",
+      url:"", h:210 },
+  ],
+  "The Studio": [
+    { title:"Project Genesis", kind:"chat", emblem:"⬢", color:"#5be0c8", h:244 },
+    { title:"Art Studio",      kind:"chat", emblem:"✎", color:"#f4a4c0", h:200, lean:true },
+    { title:"Figma Boards",    kind:"app",  emblem:"◈", color:"#38bcd4", url:"https://figma.com", h:222 },
+  ],
+  "The Field House": [
+    { title:"Coaching",  kind:"chat", emblem:"⚑", color:"#5cb87a", h:216 },
+    { title:"Teaching",  kind:"chat", emblem:"✜", color:"#e07840", h:234 },
+    { title:"Hybrid Warrior", kind:"app", emblem:"❖", color:"#e05a5a", h:198, lean:true, url:"https://zjaylewis94.github.io/hybrid-warrior/" },
+  ],
+  "The Ledger": [
+    { title:"Life Admin", kind:"chat", emblem:"⌂", color:"#c9a25e", h:210 },
+    { title:"Army / OCS", kind:"chat", emblem:"★", color:"#8a93a8", h:226 },
+  ]
+};
+
+function loadBooks(){
+  try{ var s=localStorage.getItem('archive_books'); if(s) return JSON.parse(s); }catch(e){}
+  return DEFAULT_BOOKS;
+}
+function saveBooks(b){ try{ localStorage.setItem('archive_books', JSON.stringify(b)); }catch(e){} }
+
+function openBook(b){
+  if(!b.url){
+    flash(b.title + (b.kind==='chat' ? " — open this in your Claude project (no link set yet)"
+                                      : " — no link set yet"));
+    return;
+  }
+  window.open(b.url, '_blank', 'noopener');
+}
+
+function buildShelf(name, items){
+  var shelf=document.createElement('div'); shelf.className='shelf';
+  var lbl=document.createElement('div'); lbl.className='shelf-label'; lbl.textContent=name;
+  shelf.appendChild(lbl);
+
+  var books=document.createElement('div'); books.className='books';
+  items.forEach(function(b){
+    var el=document.createElement('div');
+    el.className='book'+(b.lean?' lean':'');
+    el.tabIndex=0; el.setAttribute('role','button');
+    el.setAttribute('aria-label', b.title+' — '+(b.kind==='app'?'open app':'open chat'));
+    el.style.setProperty('--c', b.color||'#5be0c8');
+    if(b.h) el.style.setProperty('--h', b.h+'px');
+    el.innerHTML =
+      '<div class="portal"></div>'+
+      '<div class="spine-emblem">'+(b.emblem||'')+'</div>'+
+      '<div class="spine-title">'+escapeHtml(b.title)+'</div>'+
+      '<div class="kind">'+(b.kind==='app'?'open app ↗':'open chat ↗')+'</div>';
+    el.onclick=function(){ openBook(b); };
+    el.onkeydown=function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openBook(b); } };
+    books.appendChild(el);
+  });
+
+  // a plank under the row
+  var plank=document.createElement('div'); plank.className='plank';
+  shelf.appendChild(books); shelf.appendChild(plank);
+  return shelf;
+}
+
+function render(){
+  var host=document.getElementById('shelves'); host.innerHTML='';
+  var books=loadBooks();
+  Object.keys(books).forEach(function(name){
+    host.appendChild(buildShelf(name, books[name]));
+  });
+}
+
+function escapeHtml(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/* tiny toast for un-linked books */
+function flash(msg){
+  var t=document.createElement('div');
+  t.textContent=msg;
+  t.style.cssText='position:fixed;left:50%;bottom:36px;transform:translateX(-50%);z-index:99;'+
+    'background:rgba(19,30,25,.96);border:1px solid var(--brass-dim);color:var(--paper);'+
+    'font-family:DM Mono,monospace;font-size:.72rem;letter-spacing:.5px;padding:11px 16px;'+
+    'border-radius:8px;box-shadow:0 12px 30px rgba(0,0,0,.5);max-width:80vw;text-align:center';
+  document.body.appendChild(t);
+  setTimeout(function(){ t.style.transition='opacity .4s'; t.style.opacity='0'; },2600);
+  setTimeout(function(){ t.remove(); },3100);
+}
+
+/* config: paste a JSON of shelves to customize without touching code */
+document.getElementById('cfgLink').onclick=function(e){
+  e.preventDefault();
+  var cur=JSON.stringify(loadBooks(),null,2);
+  var ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;z-index:100;background:rgba(8,12,10,.86);display:flex;align-items:center;justify-content:center;padding:22px';
+  ov.innerHTML='<div style="background:var(--ink2);border:1px solid var(--brass-dim);border-radius:12px;padding:20px;max-width:640px;width:100%">'+
+    '<div style="font-family:Rajdhani,sans-serif;font-weight:700;letter-spacing:2px;color:var(--brass);text-transform:uppercase;font-size:.8rem;margin-bottom:10px">Edit shelves</div>'+
+    '<div style="font-family:DM Mono,monospace;font-size:.66rem;color:var(--smoke);margin-bottom:10px;line-height:1.5">Each book: title, kind ("app" or "chat"), color (hex), emblem, url, optional h (height). Leave url blank for chats you open manually.</div>'+
+    '<textarea id="cfgTa" spellcheck="false" style="width:100%;height:300px;background:#0c1310;border:1px solid var(--brass-dim);border-radius:8px;color:var(--paper);font-family:DM Mono,monospace;font-size:.72rem;line-height:1.5;padding:12px;outline:none;resize:vertical"></textarea>'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">'+
+      '<button id="cfgReset" style="background:none;border:1px solid var(--brass-dim);color:var(--smoke);border-radius:7px;padding:8px 14px;cursor:pointer;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:1px;text-transform:uppercase;font-size:.68rem">Reset to default</button>'+
+      '<button id="cfgCancel" style="background:none;border:1px solid var(--brass-dim);color:var(--smoke);border-radius:7px;padding:8px 14px;cursor:pointer;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:1px;text-transform:uppercase;font-size:.68rem">Cancel</button>'+
+      '<button id="cfgSave" style="background:var(--brass);border:none;color:#1a1206;border-radius:7px;padding:8px 16px;cursor:pointer;font-family:Rajdhani,sans-serif;font-weight:700;letter-spacing:1px;text-transform:uppercase;font-size:.68rem">Save</button>'+
+    '</div></div>';
+  document.body.appendChild(ov);
+  document.getElementById('cfgTa').value=cur;
+  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  document.getElementById('cfgCancel').onclick=function(){ ov.remove(); };
+  document.getElementById('cfgReset').onclick=function(){ document.getElementById('cfgTa').value=JSON.stringify(DEFAULT_BOOKS,null,2); };
+  document.getElementById('cfgSave').onclick=function(){
+    try{ var parsed=JSON.parse(document.getElementById('cfgTa').value); saveBooks(parsed); ov.remove(); render(); flash('Shelves updated'); }
+    catch(err){ flash('That JSON has an error — check your commas and quotes'); }
+  };
+};
+
+/* dust motes */
+(function(){
+  var m=document.getElementById('motes');
+  for(var i=0;i<22;i++){
+    var d=document.createElement('div'); d.className='mote';
+    d.style.left=(Math.random()*100)+'%';
+    d.style.animationDuration=(14+Math.random()*16)+'s';
+    d.style.animationDelay=(-Math.random()*20)+'s';
+    var sc=.5+Math.random()*1.4; d.style.width=(sc*2)+'px'; d.style.height=(sc*2)+'px';
+    m.appendChild(d);
+  }
+})();
+
+render();
+</script>
+</body>
+</html>
