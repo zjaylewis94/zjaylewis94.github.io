@@ -23,16 +23,19 @@ New repos use underscores (Zach's preference). Older ones keep their names.
 | Head Coach Book | `headcoach_book` (public) | Empty |
 | Sprints/Hurdle Coach | `sprint-hurdle_coach_book` (public) | Empty; rename to `sprint_hurdle_coach_book` suggested |
 | Cook Book | `cook_book` (public) | Empty |
-| Codex (Project Genesis) | `codex` (private) | Empty; the old v35 lives in `life-os/codex/index.html` |
+| Codex (Project Genesis) | `codex` (private) | **Codex 2.0 leads**; the original v35 is kept read-only in `reference/`. Pages stays off |
 | Planner data | `subroutine-data` (private) | `subroutine_data.json`; per-book to-do lists planned at `books/<id>.json` |
 | (retired) | `life-os` (private) | July attempt; don't build on it |
 
-Not yet made: Ramination, Life Admin (private), Sketch Book, and the art-ideas book (name TBD; formerly "Steez Bank").
+Not yet made: Ramination, Life Admin (private; `lifeadmin_book.html` is in Drive), Sketch Book, and **Steez Bank** (art ideas sorted by medium).
 
-Shelves in Zach's notepad plan: **Educator** (Ramination?, Teacher, Head Coach, Sprints/Hurdle), **Life Admin** (Workout, Cook, Life Admin), **Art Studio** (art-ideas book, Sketch Book), **Genesis** (Codex). Side notes: a consistent theme across books, and a cover page for each.
+Shelves in Zach's notepad plan: **Educator** (Ramination?, Teacher, Head Coach, Sprints/Hurdle), **Life Admin** (Workout, Cook, Life Admin), **Art Studio** (Steez Bank, Sketch Book), **Genesis** (Codex). Side notes: a consistent theme across books, and a cover page for each.
 
 ## Reference material
 Google Drive → `The Library/` holds one folder per shelf and one per book, plus a `START HERE` to-do doc. Read a book's folder before building it.
+- Source art (PSDs, full-res PNGs) stays in Drive. GitHub rejects files over 100 MB; books get web-size exports only.
+- Coaching material is grouped in Drive as `Educator/coaching_book/` (with `head_coach` and `sprint+hurdle_coach` inside), but there are two repos: `headcoach_book` and `sprint-hurdle_coach_book`.
+- Before anything from Drive goes into a public repo, check it for student or athlete names.
 
 ## How we work
 - One repo per book. The app shell is public; anything private (story text, student or athlete names) goes in the private data repo and loads with the user's token.
