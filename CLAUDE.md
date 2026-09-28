@@ -19,8 +19,8 @@ New repos use underscores (Zach's preference). Older ones keep their names.
 | The Archive (this) | `zjaylewis94.github.io` (public) | Front door |
 | Subroutine (planner) | `SUBROUTINE` (public) | Live; its data syncs to the private `subroutine-data` repo |
 | Workout Book | `hybrid-warrior` (public) | Live; opens on today's week from `CYCLE_START` |
-| Teacher Book | `teacher_book` (public) | Live at /teacher_book/ (the `index.html` rename is in teacher_book#2). Sync data goes to private `subroutine-data` |
-| Coaching Book | `headcoach_book` (public), to be renamed `coaching_book` | Empty. **One book, two sections: Head Coach + Sprints/Hurdles** (the sprint repo was deleted) |
+| Teacher Book | `teacher_book` (public) | Live at /teacher_book/. Sync data goes to private `subroutine-data` |
+| Coaching Book | `coaching_book` (public) | **One book, two sections.** `index.html` is a cover page linking `ramona_head_coach.html` (Head Coach HQ) and `sprint_coach_packet_v3.html` (Sprints & Hurdles). Merging them into one app is still to do |
 | Cook Book | `cook_book` (public) | Empty |
 | Codex (Project Genesis) | `codex` (private) | **Codex 2.0 leads**; the original v35 is kept read-only in `reference/`. Pages stays off |
 | Planner data | `subroutine-data` (private) | `subroutine_data.json`; per-book to-do lists planned at `books/<id>.json` |
@@ -30,6 +30,8 @@ New repos use underscores (Zach's preference). Older ones keep their names.
 
 **Raminations** is a planned series of short animated lessons (TikTok / YouTube Shorts) narrated by a mascot, **Rammy**,
 teaching art techniques and track drills. It pulls from both the Teacher and Coaching books.
+
+Spines with no link, on purpose: Codex and Project Genesis (private story), Life Admin (private), Art Studio and Army / OCS (no book yet). Figma Boards points at figma.com until Zach gives his board link.
 
 Not yet made: Raminations, Life Admin (private; `lifeadmin_book.html` is in Drive), Sketch Book, and **Steez Bank** (art ideas sorted by medium).
 
