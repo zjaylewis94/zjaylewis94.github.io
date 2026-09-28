@@ -8,6 +8,8 @@ It has no data and no sync.
 ## The file
 - `index.html` is the whole site: a single self-contained file, vanilla JS, no build step. Keep it that way.
 - Shelves live in `DEFAULT_BOOKS` in `index.html`. Book fields: `title`, `kind`, `emblem`, `color` (hex), `url`, `h` (spine height px), `lean`.
+- `kind`: `app` (opens `url`), `chat` (a Claude project; no link yet), `soon` (not written yet; faded spine), `private` (kept off the web).
+- Subroutine isn't on a shelf. It's the hub plate under the title, matching Zach's notepad, where Subroutine sits above every shelf.
 - "Edit the shelves" saves an override in that browser's localStorage (`archive_books`). That override hides later changes to `DEFAULT_BOOKS` on that device.
 - The page is public. Only titles and links go on it, never private content.
 
@@ -31,7 +33,8 @@ New repos use underscores (Zach's preference). Older ones keep their names.
 **Raminations** is a planned series of short animated lessons (TikTok / YouTube Shorts) narrated by a mascot, **Rammy**,
 teaching art techniques and track drills. It pulls from both the Teacher and Coaching books.
 
-Spines with no link, on purpose: Codex and Project Genesis (private story), Life Admin (private), Art Studio and Army / OCS (no book yet). Figma Boards points at figma.com until Zach gives his board link.
+Current shelves (Sep 28): **Educator** Teaching · Coaching · Raminations (soon) — **Life Admin** Hybrid Warrior · Cook Book (soon) · Life Admin (private) · Army / OCS (chat) — **Art Studio** Steez Bank (soon) · Sketch Book (soon) · Figma Boards — **Genesis** Codex (private).
+Army / OCS and Figma Boards aren't on the notepad; they stay until Zach decides. Figma Boards points at figma.com until he gives his board link.
 
 Not yet made: Raminations, Life Admin (private; `lifeadmin_book.html` is in Drive), Sketch Book, and **Steez Bank** (art ideas sorted by medium).
 

@@ -125,6 +125,19 @@
   /* a leaning gap-filler book for character */
   .book.lean{transform:rotate(4deg);align-self:flex-end}
   .book.lean:hover{transform:translateY(-20px) rotate(1deg)}
+  /* a book not written yet: faded spine */
+  .book.soon{filter:saturate(.35) brightness(.72)}
+  .book.soon:hover{filter:saturate(.7) brightness(.9)}
+
+  /* Subroutine sits above the shelves: the planner that runs them all */
+  .hub{display:inline-flex;align-items:center;gap:10px;margin-top:22px;padding:10px 20px;
+    border:1px solid var(--brass-dim);border-radius:999px;text-decoration:none;color:var(--paper);
+    font-family:'Rajdhani',sans-serif;font-weight:700;font-size:.8rem;letter-spacing:3px;text-transform:uppercase;
+    background:rgba(232,160,48,.07);transition:border-color .25s, box-shadow .25s}
+  .hub b{color:#e8a030;font-size:.95rem}
+  .hub span{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:500;letter-spacing:.3px;
+    text-transform:none;font-size:1rem;color:var(--smoke)}
+  .hub:hover,.hub:focus-visible{border-color:#e8a030;box-shadow:0 0 26px -6px #e8a030;outline:none}
 
   /* ── footer plate ── */
   .plate{margin-top:46px;text-align:center;font-family:'DM Mono',monospace;
@@ -146,6 +159,7 @@
     .spine-title{font-size:.86rem;letter-spacing:1px}
     .books{gap:8px;padding:22px 14px 0}
   }
+  @media (max-width:480px){ .hub span{display:none} }
   @media (prefers-reduced-motion:reduce){
     .book,.book:hover{transition:none;transform:none}
     .mote{display:none}
@@ -161,6 +175,7 @@
       <div class="eyebrow">Est. by Z. Lewis</div>
       <h1>The <span class="amp">Archive</span></h1>
       <div class="sub">Every book a mind you've been building. Pull one from the shelf.</div>
+      <a class="hub" href="https://zjaylewis94.github.io/SUBROUTINE/" target="_blank" rel="noopener"><b>◆</b> Subroutine <span>— the planner behind every shelf</span></a>
       <div class="rule"></div>
       <div class="rule-tag">— pull a book to enter —</div>
     </header>
@@ -182,25 +197,24 @@
    ──────────────────────────────────────────────────────────── */
 
 var DEFAULT_BOOKS = {
-  "Life OS": [
-    { title:"Subroutine",   kind:"app",  emblem:"◆", color:"#e8a030",
-      url:"https://zjaylewis94.github.io/SUBROUTINE/", h:230 },
-    { title:"Codex",        kind:"chat", emblem:"✦", color:"#7c6cff",
-      url:"", h:210 },
+  "Educator": [
+    { title:"Teaching",    kind:"app",  emblem:"✜", color:"#e07840", h:234, url:"https://zjaylewis94.github.io/teacher_book/" },
+    { title:"Coaching",    kind:"app",  emblem:"⚑", color:"#5cb87a", h:216, url:"https://zjaylewis94.github.io/coaching_book/" },
+    { title:"Raminations", kind:"soon", emblem:"✺", color:"#f4c542", h:204, lean:true },
   ],
-  "The Studio": [
-    { title:"Project Genesis", kind:"chat", emblem:"⬢", color:"#5be0c8", h:244 },
-    { title:"Art Studio",      kind:"chat", emblem:"✎", color:"#f4a4c0", h:200, lean:true },
-    { title:"Figma Boards",    kind:"app",  emblem:"◈", color:"#38bcd4", url:"https://figma.com", h:222 },
+  "Life Admin": [
+    { title:"Hybrid Warrior", kind:"app", emblem:"❖", color:"#e05a5a", h:222, url:"https://zjaylewis94.github.io/hybrid-warrior/" },
+    { title:"Cook Book",   kind:"soon",    emblem:"✻", color:"#d9884a", h:208 },
+    { title:"Life Admin",  kind:"private", emblem:"⌂", color:"#c9a25e", h:214 },
+    { title:"Army / OCS",  kind:"chat",    emblem:"★", color:"#8a93a8", h:226, lean:true },
   ],
-  "The Field House": [
-    { title:"Coaching",  kind:"app", emblem:"⚑", color:"#5cb87a", h:216, url:"https://zjaylewis94.github.io/coaching_book/" },
-    { title:"Teaching",  kind:"app", emblem:"✜", color:"#e07840", h:234, url:"https://zjaylewis94.github.io/teacher_book/" },
-    { title:"Hybrid Warrior", kind:"app", emblem:"❖", color:"#e05a5a", h:198, lean:true, url:"https://zjaylewis94.github.io/hybrid-warrior/" },
+  "Art Studio": [
+    { title:"Steez Bank",   kind:"soon", emblem:"✷", color:"#f4a4c0", h:228 },
+    { title:"Sketch Book",  kind:"soon", emblem:"✎", color:"#9ad0ec", h:206 },
+    { title:"Figma Boards", kind:"app",  emblem:"◈", color:"#38bcd4", url:"https://figma.com", h:218, lean:true },
   ],
-  "The Ledger": [
-    { title:"Life Admin", kind:"chat", emblem:"⌂", color:"#c9a25e", h:210 },
-    { title:"Army / OCS", kind:"chat", emblem:"★", color:"#8a93a8", h:226 },
+  "Genesis": [
+    { title:"Codex", kind:"private", emblem:"✦", color:"#7c6cff", h:244 },
   ]
 };
 
@@ -210,7 +224,10 @@ function loadBooks(){
 }
 function saveBooks(b){ try{ localStorage.setItem('archive_books', JSON.stringify(b)); }catch(e){} }
 
+var KIND_LABEL = { app:'open app ↗', chat:'open chat ↗', soon:'coming soon', private:'private' };
 function openBook(b){
+  if(b.kind==='soon'){ flash(b.title + ' — coming soon to the shelf'); return; }
+  if(b.kind==='private'){ flash(b.title + ' — private, kept off the web'); return; }
   if(!b.url){
     flash(b.title + (b.kind==='chat' ? " — open this in your Claude project (no link set yet)"
                                       : " — no link set yet"));
@@ -227,16 +244,16 @@ function buildShelf(name, items){
   var books=document.createElement('div'); books.className='books';
   items.forEach(function(b){
     var el=document.createElement('div');
-    el.className='book'+(b.lean?' lean':'');
+    el.className='book'+(b.lean?' lean':'')+(b.kind==='soon'?' soon':'');
     el.tabIndex=0; el.setAttribute('role','button');
-    el.setAttribute('aria-label', b.title+' — '+(b.kind==='app'?'open app':'open chat'));
+    el.setAttribute('aria-label', b.title+' — '+(KIND_LABEL[b.kind]||'open chat').replace(' ↗',''));
     el.style.setProperty('--c', b.color||'#5be0c8');
     if(b.h) el.style.setProperty('--h', b.h+'px');
     el.innerHTML =
       '<div class="portal"></div>'+
       '<div class="spine-emblem">'+(b.emblem||'')+'</div>'+
       '<div class="spine-title">'+escapeHtml(b.title)+'</div>'+
-      '<div class="kind">'+(b.kind==='app'?'open app ↗':'open chat ↗')+'</div>';
+      '<div class="kind">'+(KIND_LABEL[b.kind]||'open chat ↗')+'</div>';
     el.onclick=function(){ openBook(b); };
     el.onkeydown=function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openBook(b); } };
     books.appendChild(el);
