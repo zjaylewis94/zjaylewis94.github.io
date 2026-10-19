@@ -206,7 +206,7 @@ var DEFAULT_BOOKS = {
   ],
   "Life Admin": [
     { title:"Hybrid Warrior", kind:"app", emblem:"❖", color:"#e05a5a", h:222, url:"https://zjaylewis94.github.io/hybrid-warrior/" },
-    { title:"Cook Book",   kind:"soon",    emblem:"✻", color:"#d9884a", h:208 },
+    { title:"Cook Book",   kind:"app",     emblem:"✻", color:"#d9884a", h:208, url:"https://zjaylewis94.github.io/cook_book/" },
     { title:"Life Admin",  kind:"private", emblem:"⌂", color:"#c9a25e", h:214 },
     { title:"Army / OCS",  kind:"chat",    emblem:"★", color:"#8a93a8", h:226, lean:true },
   ],
@@ -221,7 +221,18 @@ var DEFAULT_BOOKS = {
 };
 
 function loadBooks(){
-  try{ var s=localStorage.getItem('archive_books'); if(s) return JSON.parse(s); }catch(e){}
+  try{
+    var s=localStorage.getItem('archive_books');
+    if(s){
+      var b=JSON.parse(s);
+      // Books that went live after a device saved its own shelves: open them there too
+      var LIVE={ "Cook Book":"https://zjaylewis94.github.io/cook_book/" };
+      Object.keys(b).forEach(function(shelf){ (b[shelf]||[]).forEach(function(x){
+        if(LIVE[x.title] && x.kind==='soon' && !x.url){ x.kind='app'; x.url=LIVE[x.title]; }
+      }); });
+      return b;
+    }
+  }catch(e){}
   return DEFAULT_BOOKS;
 }
 function saveBooks(b){ try{ localStorage.setItem('archive_books', JSON.stringify(b)); }catch(e){} }
