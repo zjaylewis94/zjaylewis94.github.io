@@ -206,8 +206,8 @@ svg.graph text.el{font-family:var(--ui);font-size:10px;fill:var(--brass);paint-o
 .pin svg{width:26px;height:30px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.7))}
 .pin .pl{position:absolute;left:14px;top:-26px;white-space:nowrap;font-family:var(--ui);font-weight:600;font-size:13px;
   background:rgba(14,21,18,.85);padding:1px 6px;border-radius:5px;transform-origin:-14px 26px;pointer-events:none}
-#mpaint,#mshade,#mvec{position:absolute;left:0;top:0}
-#mshade{pointer-events:none}
+#mauto,#mpaint,#mcaps,#mshade,#mdeco,#mvec{position:absolute;left:0;top:0}
+#mauto,#mcaps,#mshade,#mdeco{pointer-events:none}
 .v3d{position:absolute;inset:0;z-index:7;background:var(--ink)}
 #c3d{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
 .mapstage img{position:absolute;left:0;top:0}
@@ -990,7 +990,27 @@ function bindGraph() {
 // A map is an optional uploaded image, a painted terrain layer (PNG media, half resolution),
 // and vector layers in map pixels: zones (polygons over shared corner points), paths, labels and pins.
 const PAINT_SCALE = 0.5;
-const PAINTS = { land: '#4e6b47', forest: '#2f5136', sand: '#c8b27a', rock: '#7b7468', snow: '#e8e6df', water: '#1f4b5e', erase: null };
+const PAINTS = { grass: '#7fae4f', farmland: '#c9b45a', forest: '#3f7a3a', pine: '#2c5a37', jungle: '#2f8a4a', marsh: '#5f7f5a', sand: '#e2cf8f',
+  desert: '#d9a95b', tundra: '#b7c2b0', rock: '#8a7058', snow: '#f1efe8', city: '#9a9a96', water: '#2f6f8f', erase: null };
+const TREE_PAINTS = { forest: 'round', pine: 'pine', jungle: 'round' };
+// Map look: stepped "papercraft" terraces with contour lines, colour by height (beach → grass → rock → snow), trees on forest paint.
+// Auto colour starts off on maps with uploaded art so it doesn't cover the drawing.
+const mapStyle = m => Object.assign({ terraces: true, auto: !m.img, trees: true }, m.style || {});
+const TERRACE_N = 10;
+function terrace(h) {
+  if (h <= 0) return h;
+  const t = h * TERRACE_N, i = Math.floor(t), f = t - i, s = f < .8 ? 0 : (f - .8) / .2;
+  return (i + s * s * (3 - 2 * s)) / TERRACE_N;
+}
+const hexRGB = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+const RAMP = [[0, '#e2cf8f'], [0.05, '#a3c262'], [0.2, '#7fae4f'], [0.38, '#6c8c48'], [0.52, '#8a7058']].map(([h, c]) => [h, hexRGB(c)]);
+function rampColor(h) {
+  for (let i = 1; i < RAMP.length; i++) if (h <= RAMP[i][0]) {
+    const [h0, a] = RAMP[i - 1], [h1, b] = RAMP[i], t = (h - h0) / (h1 - h0);
+    return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  }
+  return RAMP[RAMP.length - 1][1];
+}
 const BGS = { ocean: '#1f4b5e', parchment: '#d9c9a3', night: '#121a17' };
 const ZONE_COLORS = ['#5be0c8', '#ffca7a', '#e0705b', '#a99bff', '#6fd08c', '#e9a3c9', '#8fb4ff', '#c9a25e'];
 const PATH_STYLES = {
@@ -1020,8 +1040,11 @@ function renderMap(mapId) {
   const pw = Math.round(m.w * PAINT_SCALE), ph = Math.round(m.h * PAINT_SCALE);
   main.innerHTML = `<div class="stage" id="mstage"><div class="mapstage" id="mview" style="width:${m.w}px;height:${m.h}px;background:${m.bg || 'transparent'}">
       ${m.img ? `<img id="mimg" alt="" style="width:${m.w}px;height:${m.h}px">` : ''}
+      <canvas id="mauto" style="width:${m.w}px;height:${m.h}px"></canvas>
       <canvas id="mpaint" width="${pw}" height="${ph}" style="width:${m.w}px;height:${m.h}px"></canvas>
+      <canvas id="mcaps" style="width:${m.w}px;height:${m.h}px"></canvas>
       <canvas id="mshade" style="width:${m.w}px;height:${m.h}px"></canvas>
+      <canvas id="mdeco" width="${pw}" height="${ph}" style="width:${m.w}px;height:${m.h}px"></canvas>
       <svg id="mvec" width="${m.w}" height="${m.h}" viewBox="0 0 ${m.w} ${m.h}"></svg>
       <div id="mpins"></div></div>
     <div class="toolbar" id="mtools"></div>
@@ -1029,14 +1052,14 @@ function renderMap(mapId) {
   if (m.img) getMedia(m.img).then(d => { if (d) $('#mimg').src = d; else toast('This map’s image hasn’t reached this device yet. Sync to fetch it.', 4000); });
   if (m.paint) getMedia(m.paint).then(d => {
     if (!d || !$('#mpaint')) return;
-    const img = new Image(); img.onload = () => { const c = $('#mpaint'); if (c) c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); }; img.src = d;
+    const img = new Image(); img.onload = () => { const c = $('#mpaint'); if (c) { c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); drawDeco(); } }; img.src = d;
   });
   if (M.H) drawShade(); else loadHeight();
   drawTools(); drawVec(); drawPins();
   if (!M.view) fitMap(); else applyMap();
   bindMap();
 }
-function newEditState(tool) { return { tool: tool || 'select', paint: 'land', brush: 'M', sculpt: 'raise', pathStyle: 'road', zoneColor: ZONE_COLORS[0] }; }
+function newEditState(tool) { return { tool: tool || 'select', paint: 'grass', brush: 'M', sculpt: 'raise', pathStyle: 'road', zoneColor: ZONE_COLORS[0] }; }
 
 /* drawing */
 function drawTools() {
@@ -1057,6 +1080,8 @@ function drawTools() {
   } else if (e.tool === 'terrain') {
     opt.push(Object.entries(SCULPT).map(([k, l]) => `<button class="btn small${e.sculpt === k ? ' on' : ''}" data-act="m-sculpt" data-v="${k}">${l}</button>`).join(''));
     opt.push(Object.keys(BRUSH).map(k => `<button class="btn small${e.brush === k ? ' on' : ''}" data-act="m-brush" data-v="${k}">${k}</button>`).join(''));
+    opt.push(styleButtons());
+    opt.push(`<label class="hint pill" style="display:flex;align-items:center;gap:4px">Peak <input id="maxElev" class="inp" type="number" min="1" step="10" value="${M.map.maxElev || 1000}" style="width:76px;padding:2px 6px"> m</label>`);
     opt.push('<button class="btn small" data-act="m-exporth">Export height map</button>');
     opt.push('<span class="hint pill">Drag to shape the land · dig below sea level for water · 3D to see it</span>');
   } else if (e.tool === 'zone') {
@@ -1099,7 +1124,8 @@ function drawVec() {
   }
   for (const l of m.labels) {
     const on = sel.t === 'label' && sel.id === l.id;
-    h += `<text class="lb${on ? ' on' : ''}" data-label="${esc(l.id)}" x="${l.x}" y="${l.y}" font-size="${l.size}" fill="${esc(l.color)}" text-anchor="middle" stroke-width="${l.size * .16}">${esc(l.text)}</text>`;
+    const elev = l.elev && M.H ? ` · ${Math.round(Math.max(0, sampleBil(Math.min(M.hw - 1, Math.max(0, l.x / H_SCALE)), Math.min(M.hh - 1, Math.max(0, l.y / H_SCALE)))) * (m.maxElev || 1000))} m` : '';
+    h += `<text class="lb${on ? ' on' : ''}" data-label="${esc(l.id)}" x="${l.x}" y="${l.y}" font-size="${l.size}" fill="${esc(l.color)}" text-anchor="middle" stroke-width="${l.size * .16}">${esc(l.text + elev)}</text>`;
   }
   if (e && (e.tool === 'select' || e.tool === 'zone')) {
     const used = new Set(); m.zones.forEach(z => z.pts.forEach(id => used.add(id)));
@@ -1160,7 +1186,7 @@ const snapUndo = () => pushUndo({ v: vecState() });
 function undo() {
   const u = M.undo.pop(); if (!u) return;
   if (u.v) { Object.assign(M.map, JSON.parse(u.v)); touchMap(); }
-  else if (u.img) { $('#mpaint').getContext('2d').putImageData(u.img, 0, 0); M.paintDirty = true; }
+  else if (u.img) { $('#mpaint').getContext('2d').putImageData(u.img, 0, 0); M.paintDirty = true; drawDeco(); }
   else if (u.hgt) { M.H.set(u.hgt); M.heightDirty = true; drawShade(); }
   M.sel = null; M.draft = null; hideInfo(); redraw();
 }
@@ -1196,8 +1222,8 @@ function strokeTo(g, q) {
   ctx.moveTo(g.last.x * PAINT_SCALE, g.last.y * PAINT_SCALE); ctx.lineTo(q.x * PAINT_SCALE, q.y * PAINT_SCALE); ctx.stroke();
   g.last = q;
 }
-function endStroke(g) { g.ctx.restore(); pushUndo({ img: g.before }); M.paintDirty = true; drawTools(); }
-function cancelStroke(g) { g.ctx.restore(); g.ctx.putImageData(g.before, 0, 0); }
+function endStroke(g) { g.ctx.restore(); pushUndo({ img: g.before }); M.paintDirty = true; drawTools(); drawDeco(); }
+function cancelStroke(g) { g.ctx.restore(); g.ctx.putImageData(g.before, 0, 0); drawDeco(); }
 
 /* zones + paths */
 function project(q, a, b) {
@@ -1304,6 +1330,7 @@ function showProps() {
   if (s.t === 'label') h = `<span class="hint">Label</span><input class="inp" data-mprop="text" value="${esc(it.text)}" style="width:100%;margin:6px 0">
     <div class="row">${[['S', 22], ['M', 34], ['L', 56], ['XL', 90]].map(([k, n]) => `<button class="btn small${Math.round(n * mapScale(M.map)) === it.size ? ' on' : ''}" data-act="m-lsize" data-v="${n}">${k}</button>`).join('')}
       ${['#e9e0c9', '#0e1512', '#ffca7a', '#5be0c8'].map(c => `<button class="sw${it.color === c ? ' on' : ''}" data-act="m-lcolor" data-v="${c}" style="background:${c}"></button>`).join('')}
+      <button class="btn small${it.elev ? ' on' : ''}" data-act="m-lelev">Show height</button>
       <button class="btn small danger" data-act="m-del">Delete</button></div>`;
   if (s.t === 'pin') h = `<span class="hint">Pin</span><div class="row" style="margin-top:6px">${cardChip(it.card)}<button class="btn small danger" data-act="m-del">Remove pin</button></div>`;
   if (s.t === 'pt') h = `<span class="hint">Corner · shared by ${M.map.zones.filter(z => z.pts.includes(s.id)).length} zone(s)</span><div class="row" style="margin-top:6px"><button class="btn small danger" data-act="m-del">Delete corner</button></div>`;
@@ -1378,6 +1405,13 @@ function mapAct(a, el) {
       return drawTools();
     case 'lsize': snapUndo(); it.size = Math.round(+v * mapScale(M.map)); touchMap(); return select(M.sel);
     case 'lcolor': snapUndo(); it.color = v; touchMap(); return select(M.sel);
+    case 'lelev': snapUndo(); it.elev = !it.elev; touchMap(); return select(M.sel);
+    case 'style': {
+      const st = mapStyle(M.map); st[v] = !st[v]; M.map.style = st; touchMap();
+      drawShade(); drawDeco(); drawTools();
+      if (V3) { V3.buildMesh(); V3.retex(); el.classList.toggle('on', st[v]); }
+      return;
+    }
     case 'link': return pickCard({ title: 'Link this zone to…', onPick: id => { it.card = id; if (!it.name) it.name = card(id).title; touchMap(); select(M.sel); } });
     case 'unlink': it.card = null; touchMap(); return select(M.sel);
     case 'menu': {
@@ -1575,26 +1609,87 @@ function commitHeight() {
 }
 function commitLayers() { commitPaint(); commitHeight(); }
 
-// Hill shading: light from the north-west; land below sea level is tinted as water.
+// Terrain layers, all at height-map resolution:
+//   #mauto  (under paint)  colour by height where nothing is painted
+//   #mcaps  (over paint)   rock, then snow, on high ground
+//   #mshade (over all)     hill shading from the north-west, contour lines at terrace steps, water below sea level
 let shadeQueued = false;
 function drawShade() {
   if (shadeQueued) return; shadeQueued = true;
   requestAnimationFrame(() => {
     shadeQueued = false;
-    const c = $('#mshade'); if (!c || !M || !M.H) return;
-    const { H, hw, hh } = M; c.width = hw; c.height = hh;
-    const ctx = c.getContext('2d'), img = ctx.createImageData(hw, hh), px = img.data, zf = 35;
-    const lx = -0.6, ly = -0.6, lz = 0.53, flat = lz;
+    const cs = ['#mauto', '#mcaps', '#mshade'].map(sel => $(sel));
+    if (!M || cs.some(c => !c)) return;
+    if (!M.H) { cs.forEach(c => { c.width = 1; c.height = 1; }); return; }
+    const { H, hw, hh } = M, st = mapStyle(M.map);
+    cs.forEach(c => { c.width = hw; c.height = hh; });
+    const [ia, ic, is] = cs.map(c => c.getContext('2d').createImageData(hw, hh));
+    const pa = ia.data, pc = ic.data, ps = is.data, zf = 35, lx = -0.6, ly = -0.6, lz = 0.53;
+    const T = st.terraces ? new Float32Array(H.length).map((_, i) => terrace(H[i])) : H;
+    const rock = hexRGB(PAINTS.rock), snow = hexRGB(PAINTS.snow), lvl = h => Math.floor(Math.max(0, h) * TERRACE_N);
     for (let y = 0; y < hh; y++) for (let x = 0; x < hw; x++) {
-      const i = y * hw + x, h = H[i];
-      const dx = (H[y * hw + Math.min(hw - 1, x + 1)] - H[y * hw + Math.max(0, x - 1)]) * zf;
-      const dy = (H[Math.min(hh - 1, y + 1) * hw + x] - H[Math.max(0, y - 1) * hw + x]) * zf;
-      const len = Math.hypot(dx, dy, 1), s = (-dx * lx - dy * ly + lz) / len - flat, o = i * 4;
-      if (h < -0.004) { px[o] = 31; px[o + 1] = 90; px[o + 2] = 120; px[o + 3] = Math.min(220, 90 + -h * 500); continue; }
-      if (s < 0) { px[o + 3] = Math.min(150, -s * 240); }
-      else { px[o] = px[o + 1] = px[o + 2] = 255; px[o + 3] = Math.min(110, s * 200); }
+      const i = y * hw + x, h = H[i], o = i * 4;
+      if (h < -0.004) { ps[o] = 31; ps[o + 1] = 90; ps[o + 2] = 120; ps[o + 3] = Math.min(220, 90 + -h * 500); continue; }
+      const dx = (T[y * hw + Math.min(hw - 1, x + 1)] - T[y * hw + Math.max(0, x - 1)]) * zf;
+      const dy = (T[Math.min(hh - 1, y + 1) * hw + x] - T[Math.max(0, y - 1) * hw + x]) * zf;
+      const len = Math.hypot(dx, dy, 1), sh = (-dx * lx - dy * ly + lz) / len - lz;
+      if (sh < 0) ps[o + 3] = Math.min(150, -sh * 240);
+      else { ps[o] = ps[o + 1] = ps[o + 2] = 255; ps[o + 3] = Math.min(110, sh * 200); }
+      if (st.auto && h > 0.004) {
+        const c = rampColor(h); pa[o] = c[0]; pa[o + 1] = c[1]; pa[o + 2] = c[2]; pa[o + 3] = 255;
+        if (h > 0.28) {   // rock takes over the slopes, then snow on the tops, even where grass is painted
+          const snowy = h > 0.6, a = snowy ? Math.min(1, (h - 0.6) / 0.08) : Math.min(1, (h - 0.28) / 0.14), c2 = snowy ? snow : rock;
+          pc[o] = c2[0]; pc[o + 1] = c2[1]; pc[o + 2] = c2[2]; pc[o + 3] = Math.round((snowy ? 240 : 215) * a);
+        }
+      }
+      if (st.terraces && h > 0.004) {   // contour lines live on the caps layer so the 3D view shows them too
+        const L = lvl(h);
+        if ((x + 1 < hw && lvl(H[i + 1]) !== L) || (y + 1 < hh && lvl(H[i + hw]) !== L)) { pc[o] = 52; pc[o + 1] = 38; pc[o + 2] = 26; pc[o + 3] = 150; }
+      }
     }
-    ctx.putImageData(img, 0, 0);
+    cs.forEach((c, k) => c.getContext('2d').putImageData([ia, ic, is][k], 0, 0));
+  });
+}
+function styleButtons() {
+  const st = mapStyle(M.map);
+  return [['terraces', 'Terraces'], ['auto', 'Auto colour'], ['trees', 'Trees']]
+    .map(([k, l]) => `<button class="btn small${st[k] ? ' on' : ''}" data-act="m-style" data-v="${k}">${l}</button>`).join('');
+}
+// Trees: sample the paint layer on a jittered grid and keep spots painted forest, pine or jungle.
+function treePoints() {
+  const p = $('#mpaint'); if (!p) return [];
+  const w = p.width, h = p.height, d = p.getContext('2d').getImageData(0, 0, w, h).data;
+  const kinds = Object.entries(TREE_PAINTS).map(([k, shape]) => ({ shape, c: hexRGB(PAINTS[k]) }));
+  const step = Math.max(4, Math.round(10 * mapScale(M.map) * PAINT_SCALE)), out = [];
+  for (let y = 0; y < h; y += step) for (let x = 0; x < w; x += step) {
+    const r = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453, jx = Math.min(w - 1, Math.round(x + (r - Math.floor(r)) * step * .8));
+    const r2 = Math.sin(x * 39.346 + y * 11.135) * 24634.6345, jy = Math.min(h - 1, Math.round(y + (r2 - Math.floor(r2)) * step * .8));
+    const o = (jy * w + jx) * 4; if (d[o + 3] < 200) continue;
+    const k = kinds.find(t => Math.abs(d[o] - t.c[0]) + Math.abs(d[o + 1] - t.c[1]) + Math.abs(d[o + 2] - t.c[2]) < 30);
+    if (k) { out.push({ x: jx / PAINT_SCALE, y: jy / PAINT_SCALE, shape: k.shape, v: r - Math.floor(r) }); if (out.length >= 5000) return out; }
+  }
+  return out;
+}
+let decoQueued = false;
+function drawDeco() {
+  if (decoQueued) return; decoQueued = true;
+  requestAnimationFrame(() => {
+    decoQueued = false;
+    const c = $('#mdeco'); if (!c || !M) return;
+    const ctx = c.getContext('2d'); ctx.clearRect(0, 0, c.width, c.height);
+    if (!mapStyle(M.map).trees) return;
+    const sz = 7 * mapScale(M.map) * PAINT_SCALE;
+    for (const t of treePoints()) {
+      const x = t.x * PAINT_SCALE, y = t.y * PAINT_SCALE, s = sz * (0.8 + t.v * 0.5);
+      ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(x + s * .3, y + s * .9, s * .7, s * .3, 0, 0, 7); ctx.fill();
+      if (t.shape === 'pine') {
+        ctx.fillStyle = '#1f4a2c'; ctx.beginPath(); ctx.moveTo(x, y - s * 1.3); ctx.lineTo(x + s * .7, y + s * .8); ctx.lineTo(x - s * .7, y + s * .8); ctx.fill();
+        ctx.fillStyle = '#2f6a3c'; ctx.beginPath(); ctx.moveTo(x, y - s * 1.3); ctx.lineTo(x - s * .7, y + s * .8); ctx.lineTo(x, y + s * .8); ctx.fill();
+      } else {
+        ctx.fillStyle = '#2f6b2f'; ctx.beginPath(); ctx.arc(x, y, s * .8, 0, 7); ctx.fill();
+        ctx.fillStyle = '#4c9140'; ctx.beginPath(); ctx.arc(x - s * .25, y - s * .25, s * .45, 0, 7); ctx.fill();
+      }
+    }
   });
 }
 
@@ -1640,7 +1735,7 @@ function dab(g, q) {
   }
   drawShade();
 }
-function endSculpt(g) { pushUndo({ hgt: g.before }); M.heightDirty = true; drawTools(); }
+function endSculpt(g) { pushUndo({ hgt: g.before }); M.heightDirty = true; drawTools(); drawVec(); }
 function cancelSculpt(g) { M.H.set(g.before); drawShade(); }
 
 /* export for game engines: 16-bit greyscale PNG (Unreal, Godot, Blender) or 1025×1025 RAW (Unity) */
@@ -1729,7 +1824,7 @@ async function mapTexture() {
   const ctx = c.getContext('2d');
   ctx.fillStyle = m.bg || '#1f4b5e'; ctx.fillRect(0, 0, c.width, c.height);
   const img = $('#mimg'); if (img && img.complete && img.naturalWidth) ctx.drawImage(img, 0, 0, c.width, c.height);
-  const paint = $('#mpaint'); if (paint) ctx.drawImage(paint, 0, 0, c.width, c.height);
+  for (const sel of ['#mauto', '#mpaint', '#mcaps']) { const l = $(sel); if (l && l.width > 1) ctx.drawImage(l, 0, 0, c.width, c.height); }
   try {
     const svg = $('#mvec').cloneNode(true);
     svg.querySelectorAll('.h,.hit').forEach(n => n.remove());
@@ -1749,7 +1844,7 @@ async function open3D() {
   wrap.innerHTML = `<canvas id="c3d"></canvas>
     <div class="toolbar"><div class="tools-row"><button class="btn small solid" data-act="m-close3d">Back to map</button>
       <label class="hint pill" style="display:flex;align-items:center;gap:6px">Height <input type="range" id="v3ex" min="0.2" max="3" step="0.1" value="${ui.ex3d || 1}"></label>
-      <button class="btn small${ui.water3d === false ? '' : ' on'}" data-act="m-water3d">Water</button></div>
+      <button class="btn small${ui.water3d === false ? '' : ' on'}" data-act="m-water3d">Water</button>${styleButtons()}</div>
       <div class="tools-row"><span class="hint pill">${M.H.some(v => v) ? 'Drag to turn · pinch or scroll to zoom' : 'Flat so far: use Terrain in Edit map to raise mountains'}</span></div></div>`;
   $('#mstage').appendChild(wrap);
   const cv = $('#c3d'), gl = cv.getContext('webgl', { antialias: true });
@@ -1758,6 +1853,10 @@ async function open3D() {
     void main(){vn=n;vuv=uv;gl_Position=mvp*vec4(p,1.);}`,
     `precision mediump float;uniform sampler2D tex;varying vec3 vn;varying vec2 vuv;
     void main(){vec3 L=normalize(vec3(-.5,.8,-.4));float d=max(dot(normalize(vn),L),0.);gl_FragColor=vec4(texture2D(tex,vuv).rgb*(.5+.62*d),1.);}`);
+  const vcol = glProgram(gl, `attribute vec3 p;attribute vec3 n;attribute vec3 c;uniform mat4 mvp;varying vec3 vn;varying vec3 vc;
+    void main(){vn=n;vc=c;gl_Position=mvp*vec4(p,1.);}`,
+    `precision mediump float;varying vec3 vn;varying vec3 vc;
+    void main(){vec3 L=normalize(vec3(-.5,.8,-.4));float d=max(dot(normalize(vn),L),0.);gl_FragColor=vec4(vc*(.55+.6*d),1.);}`);
   const flat = glProgram(gl, `attribute vec3 p;uniform mat4 mvp;void main(){gl_Position=mvp*vec4(p,1.);}`,
     `precision mediump float;uniform vec4 col;void main(){gl_FragColor=col;}`);
   const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
@@ -1766,7 +1865,9 @@ async function open3D() {
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([31, 75, 94, 255]));
   const aspect = m.h / m.w, gk = Math.min(1, 240 / Math.max(M.hw, M.hh));   // ≤ 240×240 vertices keeps 16-bit indices
   const cols = Math.max(2, Math.round(M.hw * gk)), rows = Math.max(2, Math.round(M.hh * gk));
-  const bufs = { pos: gl.createBuffer(), nrm: gl.createBuffer(), uv: gl.createBuffer(), idx: gl.createBuffer(), water: gl.createBuffer() };
+  const bufs = { pos: gl.createBuffer(), nrm: gl.createBuffer(), uv: gl.createBuffer(), idx: gl.createBuffer(), water: gl.createBuffer(),
+    extra: gl.createBuffer() };
+  let extraCount = 0;
   const uv = new Float32Array(cols * rows * 2), idx = new Uint16Array((cols - 1) * (rows - 1) * 6);
   for (let j = 0, o = 0; j < rows; j++) for (let i = 0; i < cols; i++) { uv[o++] = i / (cols - 1); uv[o++] = j / (rows - 1); }
   for (let j = 0, o = 0; j < rows - 1; j++) for (let i = 0; i < cols - 1; i++) {
@@ -1779,7 +1880,8 @@ async function open3D() {
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-.5, wy, -aspect / 2, .5, wy, -aspect / 2, -.5, wy, aspect / 2, .5, wy, aspect / 2]), gl.STATIC_DRAW);
   function buildMesh() {
     const ex = (ui.ex3d || 1) * 0.12, pos = new Float32Array(cols * rows * 3), nrm = new Float32Array(cols * rows * 3);
-    const hAt = (i, j) => { const x = i / (cols - 1) * (M.hw - 1), y = j / (rows - 1) * (M.hh - 1); return sampleBil(x, y) * ex; };
+    const T = mapStyle(m).terraces ? terrace : (v => v);
+    const hAt = (i, j) => { const x = i / (cols - 1) * (M.hw - 1), y = j / (rows - 1) * (M.hh - 1); return T(sampleBil(x, y)) * ex; };
     for (let j = 0, o = 0; j < rows; j++) for (let i = 0; i < cols; i++, o += 3) { pos[o] = i / (cols - 1) - .5; pos[o + 1] = hAt(i, j); pos[o + 2] = (j / (rows - 1) - .5) * aspect; }
     const sx = 1 / (cols - 1), sz = aspect / (rows - 1);
     for (let j = 0, o = 0; j < rows; j++) for (let i = 0; i < cols; i++, o += 3) {
@@ -1790,6 +1892,34 @@ async function open3D() {
     }
     gl.bindBuffer(gl.ARRAY_BUFFER, bufs.pos); gl.bufferData(gl.ARRAY_BUFFER, pos, gl.STATIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, bufs.nrm); gl.bufferData(gl.ARRAY_BUFFER, nrm, gl.STATIC_DRAW);
+    // Earth slab under the island (diorama sides) and trees, in one interleaved buffer: position, normal, colour.
+    const ex2 = [], put = (p, n, c) => ex2.push(p[0], p[1], p[2], n[0], n[1], n[2], c[0], c[1], c[2]);
+    const base = H_MIN * ex - 0.035, top = [0.5, 0.36, 0.23], bot = [0.27, 0.18, 0.11];
+    const V = k => [pos[k * 3], pos[k * 3 + 1], pos[k * 3 + 2]];
+    const side = (ks, n) => {
+      for (let q = 0; q < ks.length - 1; q++) {
+        const a = V(ks[q]), b = V(ks[q + 1]), a0 = [a[0], base, a[2]], b0 = [b[0], base, b[2]];
+        put(a, n, top); put(b, n, top); put(a0, n, bot); put(b, n, top); put(b0, n, bot); put(a0, n, bot);
+      }
+    };
+    const range = (n, f) => Array.from({ length: n }, (_, k) => f(k));
+    side(range(cols, i => i), [0, 0, -1]); side(range(cols, i => (rows - 1) * cols + i).reverse(), [0, 0, 1]);
+    side(range(rows, j => j * cols).reverse(), [-1, 0, 0]); side(range(rows, j => j * cols + cols - 1), [1, 0, 0]);
+    if (mapStyle(m).trees) {
+      const greens = { round: [[0.18, 0.42, 0.18], [0.3, 0.57, 0.25]], pine: [[0.12, 0.29, 0.17], [0.19, 0.42, 0.24]] };
+      for (const t of treePoints()) {
+        const hx = Math.min(M.hw - 1, t.x / H_SCALE), hy = Math.min(M.hh - 1, t.y / H_SCALE), y0 = T(sampleBil(hx, hy)) * ex;
+        if (y0 < 0) continue;
+        const cx = t.x / m.w - .5, cz = (t.y / m.h - .5) * aspect, s = 0.85 + t.v * 0.5;
+        const r = (t.shape === 'pine' ? 0.0042 : 0.006) * s, hgt = (t.shape === 'pine' ? 0.02 : 0.013) * s, [cA, cB] = greens[t.shape];
+        for (let k = 0; k < 6; k++) {
+          const a0 = k / 6 * Math.PI * 2, a1 = (k + 1) / 6 * Math.PI * 2, am = (a0 + a1) / 2, nn = [Math.cos(am), r / hgt, Math.sin(am)];
+          put([cx, y0 + hgt, cz], nn, cB); put([cx + Math.cos(a0) * r, y0, cz + Math.sin(a0) * r], nn, cA); put([cx + Math.cos(a1) * r, y0, cz + Math.sin(a1) * r], nn, cA);
+        }
+      }
+    }
+    extraCount = ex2.length / 9;
+    gl.bindBuffer(gl.ARRAY_BUFFER, bufs.extra); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(ex2), gl.STATIC_DRAW);
   }
   const cam = { yaw: 0.6, pitch: 0.75, dist: cv.clientWidth < cv.clientHeight ? 2.3 : 1.5 };
   let queued = false;
@@ -1810,6 +1940,12 @@ async function open3D() {
       gl.bindTexture(gl.TEXTURE_2D, tex); gl.uniform1i(gl.getUniformLocation(prog, 'tex'), 0);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufs.idx); gl.drawElements(gl.TRIANGLES, idx.length, gl.UNSIGNED_SHORT, 0);
       ls.forEach(l => gl.disableVertexAttribArray(l));
+      if (extraCount) {
+        gl.useProgram(vcol); gl.uniformMatrix4fv(gl.getUniformLocation(vcol, 'mvp'), false, mvp);
+        gl.bindBuffer(gl.ARRAY_BUFFER, bufs.extra);
+        const el = ['p', 'n', 'c'].map((nm, k) => { const l = gl.getAttribLocation(vcol, nm); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, 3, gl.FLOAT, false, 36, k * 12); return l; });
+        gl.drawArrays(gl.TRIANGLES, 0, extraCount); el.forEach(l => gl.disableVertexAttribArray(l));
+      }
       if (ui.water3d !== false) {
         gl.useProgram(flat); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         const l = attr(flat, 'p', bufs.water, 3);
@@ -1819,14 +1955,14 @@ async function open3D() {
       }
     });
   }
-  V3 = { gl, draw, buildMesh, cam, wrap };
-  buildMesh(); draw();
-  mapTexture().then(c => {
+  const retex = () => mapTexture().then(c => {
     if (!V3 || V3.gl !== gl) return;
     gl.bindTexture(gl.TEXTURE_2D, tex);
     try { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c); } catch (e) { /* tainted canvas: keep the plain colour */ }
     draw();
   });
+  V3 = { gl, draw, buildMesh: () => { buildMesh(); draw(); }, retex, cam, wrap };
+  buildMesh(); draw(); retex();
   $('#v3ex').oninput = e => { ui.ex3d = +e.target.value; saveJSON(UI_KEY, ui); buildMesh(); draw(); };
   const pts = new Map(); let g = null;
   cv.addEventListener('pointerdown', e => {
@@ -2197,6 +2333,7 @@ function addRel(a, b, label) {
   changed(); toast('Connected'); render();
 }
 document.addEventListener('change', e => {
+  if (e.target.id === 'maxElev' && M) { M.map.maxElev = Math.max(1, +e.target.value || 1000); touchMap(); drawVec(); return; }
   if (e.target.matches('select[data-act="set-status"]')) { const c = card(route().id); setStatus(c, e.target.value); render(); }
 });
 
