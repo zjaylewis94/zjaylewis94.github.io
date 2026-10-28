@@ -162,6 +162,7 @@ textarea.inp{font-family:var(--serif);font-size:18px;line-height:1.5;min-height:
 .toolbar{position:absolute;top:10px;left:10px;right:10px;display:flex;gap:6px;flex-wrap:wrap;z-index:5;pointer-events:none}
 .toolbar>*{pointer-events:auto}
 .toolbar .btn,.toolbar select{background:rgba(14,21,18,.9)}
+.toolbar .btn.solid{background:var(--brass)}
 svg.graph{width:100%;height:100%;display:block;cursor:grab}
 svg.graph .gn{cursor:pointer}
 svg.graph .gn text{font-family:var(--ui);font-size:12px;fill:var(--paper);paint-order:stroke;stroke:var(--ink);stroke-width:3px;pointer-events:none}
@@ -188,7 +189,28 @@ svg.graph text.el{font-family:var(--ui);font-size:10px;fill:var(--brass);paint-o
 .pin svg{width:26px;height:30px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.7))}
 .pin .pl{position:absolute;left:14px;top:-26px;white-space:nowrap;font-family:var(--ui);font-weight:600;font-size:13px;
   background:rgba(14,21,18,.85);padding:1px 6px;border-radius:5px;transform-origin:-14px 26px;pointer-events:none}
-.stage.placing{cursor:crosshair}
+#mpaint,#mvec{position:absolute;left:0;top:0}
+.mapstage img{position:absolute;left:0;top:0}
+#mvec{overflow:visible}
+#mvec text{font-family:var(--ui);font-weight:700;paint-order:stroke;stroke:#0e1512;stroke-linejoin:round}
+#mvec .zl{fill:var(--paper);pointer-events:none;letter-spacing:.08em}
+#mvec .lb{cursor:default}
+#mvec .lb.on{text-decoration:underline}
+#mvec .h{fill:#0e1512;stroke:var(--glow);cursor:move}
+#mvec .h.on{fill:var(--glow)}
+#mvec .h.draft{fill:var(--lamp);stroke:#0e1512;pointer-events:none}
+#mvec .h.first{fill:var(--glow)}
+.stage.editing.tool-paint,.stage.editing.tool-zone,.stage.editing.tool-path,.stage.editing.tool-label,.stage.editing.tool-pin{cursor:crosshair}
+.toolbar{flex-direction:column;align-items:flex-start}
+.tools-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;pointer-events:none}
+.tools-row>*{pointer-events:auto}
+.tools-row:empty{display:none}
+.sw{width:26px;height:26px;border-radius:50%;border:2px solid var(--line);flex:none}
+.sw.on{border-color:var(--paper);box-shadow:0 0 0 2px var(--ink)}
+.pill{background:rgba(14,21,18,.85);padding:3px 8px;border-radius:6px}
+.btn[disabled]{opacity:.4;cursor:default}
+.pin.on svg{filter:drop-shadow(0 0 6px var(--glow))}
+.info .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .centered{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center}
 .centered .box{max-width:460px}
 .centered h2{font-size:32px;font-weight:600;margin-bottom:8px}
@@ -297,7 +319,7 @@ const REL_LABELS = ['member of', 'leads', 'runs', 'sibling of', 'brother of', 's
 
 /* ---------- state ---------- */
 let W = null;                  // the world
-let meta = { baseSha: null, dirty: false, syncedMedia: [], lastSync: 0 };
+let meta = { baseSha: null, dirty: false, syncedMedia: [], mediaGone: [], lastSync: 0 };
 let gh = loadJSON(GH_KEY, DEFAULT_GH);
 let ui = loadJSON(UI_KEY, { fType: 'all', fStatus: 'live', showMentions: true, showV35: true, mapId: null });
 const media = {};              // id -> dataURL (in-memory cache of IndexedDB "media")
@@ -345,7 +367,7 @@ function blankWorld() { return { format: 'codex2', version: 1, updated: Date.now
 function normalize(w) {
   w = Object.assign(blankWorld(), w || {});
   w.cards = (w.cards || []).map(c => Object.assign({ aliases: [], tags: [], fields: [], status: 'draft', parent: null, body: '', autolink: true, type: 'note', order: 0 }, c));
-  w.maps.forEach(m => { m.pins = m.pins || []; });
+  w.maps.forEach(normalizeMap);
   return w;
 }
 const card = id => (cache.byId || buildById())[id];
@@ -513,6 +535,7 @@ window.addEventListener('hashchange', () => {
 function render() {
   lastHash = location.hash;
   const r = route();
+  if (mapEditing() && (r.v !== 'map' || (r.id && r.id !== M.map.id))) exitEdit(true);
   document.querySelectorAll('#views a').forEach(a => a.classList.toggle('on', a.dataset.v === view()));
   renderList();
   if (!W) return renderWelcome();
@@ -565,7 +588,7 @@ function renderCard(c) {
   const kids = W.cards.filter(x => x.parent === c.id).sort((a, b) => (a.order - b.order) || a.title.localeCompare(b.title));
   const rels = relationsOf(c.id);
   const back = backlinks(c.id);
-  const pins = []; W.maps.forEach(m => m.pins.forEach(p => { if (p.card === c.id) pins.push(m); }));
+  const pins = W.maps.filter(m => m.pins.some(p => p.card === c.id) || m.zones.some(z => z.card === c.id));
   const fields = c.fields.filter(f => f.k.trim() || f.v.trim());
   main.innerHTML = `<article>
     ${crumbs.length ? `<div class="crumbs">${crumbs.map(p => `<a class="wl" data-id="${esc(p.id)}">${esc(p.title)}</a>`).join(' › ')} ›</div>` : ''}
@@ -695,7 +718,11 @@ function deleteCard(c) {
   W.deleted[c.id] = now;
   W.cards = W.cards.filter(x => x.id !== c.id);
   W.relations = W.relations.filter(r => { const gone = r.a === c.id || r.b === c.id; if (gone) W.deleted[r.id] = now; return !gone; });
-  W.maps.forEach(m => { const n = m.pins.length; m.pins = m.pins.filter(p => p.card !== c.id); if (m.pins.length !== n) m.updated = now; });
+  W.maps.forEach(m => {
+    const n = m.pins.length; m.pins = m.pins.filter(p => p.card !== c.id);
+    m.zones.forEach(z => { if (z.card === c.id) { z.card = null; m.updated = now; } });
+    if (m.pins.length !== n) m.updated = now;
+  });
   W.cards.forEach(x => { if (x.parent === c.id) { x.parent = null; touch(x); } });
   delete W.canvas[c.id];
   editing = null; changed(); go('#/');
@@ -929,103 +956,524 @@ function bindGraph() {
 }
 
 /* ---------- maps ---------- */
-let M = null;
+// A map is an optional uploaded image, a painted terrain layer (PNG media, half resolution),
+// and vector layers in map pixels: zones (polygons over shared corner points), paths, labels and pins.
+const PAINT_SCALE = 0.5;
+const PAINTS = { land: '#4e6b47', forest: '#2f5136', sand: '#c8b27a', rock: '#7b7468', snow: '#e8e6df', water: '#1f4b5e', erase: null };
+const BGS = { ocean: '#1f4b5e', parchment: '#d9c9a3', night: '#121a17' };
+const ZONE_COLORS = ['#5be0c8', '#ffca7a', '#e0705b', '#a99bff', '#6fd08c', '#e9a3c9', '#8fb4ff', '#c9a25e'];
+const PATH_STYLES = {
+  road: { label: 'Road', color: '#d9b46a', w: 6 }, river: { label: 'River', color: '#4aa3d8', w: 9 },
+  trail: { label: 'Trail', color: '#e9e0c9', w: 4, dash: '3 5' }, border: { label: 'Border', color: '#e0705b', w: 4, dash: '10 7' },
+};
+const BRUSH = { S: 12, M: 30, L: 64, XL: 130 };
+const MAP_TOOLS = [['select', 'Select'], ['paint', 'Paint'], ['zone', 'Zone'], ['path', 'Path'], ['label', 'Label'], ['pin', 'Pin']];
+let M = null, pendingTool = null;
+
+const mapScale = m => Math.max(m.w, m.h) / 1600;
+const mapEditing = () => !!(M && M.edit);
 function renderMap(mapId) {
+  if (M && M.paintDirty) commitPaint();
   const m = W.maps.find(x => x.id === (mapId || ui.mapId)) || W.maps[0];
   if (!m) {
-    main.innerHTML = `<div class="centered"><div class="box"><h2>Maps</h2><p>Upload a map (a level, a district, anything) and drop pins that open cards. Images are resized on your device and synced to the private repo.</p>
-      <button class="btn solid" data-act="new-map">Upload a map</button></div></div>`;
+    M = null;
+    main.innerHTML = `<div class="centered"><div class="box"><h2>Maps</h2><p>Paint a world from scratch, or upload your own map art. Then draw zones, roads and rivers, add labels, and drop pins that open cards.</p>
+      <button class="btn solid" data-act="m-new">New map</button></div></div>`;
     return;
   }
   if (ui.mapId !== m.id) { ui.mapId = m.id; saveJSON(UI_KEY, ui); }
-  main.innerHTML = `<div class="stage" id="mstage"><div class="mapstage" id="mview"><img id="mimg" alt="">
-      ${m.pins.map(p => { const c = card(p.card); if (!c) return ''; return `<div class="pin" style="left:${p.x * 100}%;top:${p.y * 100}%" data-pin="${esc(p.id)}">
-        <button data-pinbtn="${esc(p.id)}" aria-label="${esc(c.title)}"><svg viewBox="0 0 26 30"><path d="M13 29s10-9.5 10-16.5A10 10 0 0 0 3 12.5C3 19.5 13 29 13 29z" fill="${typeOf(c).color}" stroke="#0e1512" stroke-width="2"/><circle cx="13" cy="12.5" r="3.6" fill="#0e1512"/></svg></button>
-        <span class="pl">${esc(c.title)}</span></div>`; }).join('')}</div>
-    <div class="toolbar"><select id="mapSel">${W.maps.map(x => `<option value="${esc(x.id)}"${x.id === m.id ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
-      <button class="btn small" data-act="pin-mode" id="pinMode">+ Pin</button><button class="btn small" data-act="fit-map">Fit</button>
-      <button class="btn small" data-act="new-map">New map</button><button class="btn small" data-act="map-menu">⋯</button></div>
+  const same = M && M.map.id === m.id;
+  M = { map: m, view: same ? M.view : null, edit: same ? M.edit : null, undo: same ? M.undo : [], sel: null, draft: null, hover: null, paintDirty: false };
+  if (pendingTool) { M.edit = newEditState(pendingTool); pendingTool = null; }
+  const pw = Math.round(m.w * PAINT_SCALE), ph = Math.round(m.h * PAINT_SCALE);
+  main.innerHTML = `<div class="stage" id="mstage"><div class="mapstage" id="mview" style="width:${m.w}px;height:${m.h}px;background:${m.bg || 'transparent'}">
+      ${m.img ? `<img id="mimg" alt="" style="width:${m.w}px;height:${m.h}px">` : ''}
+      <canvas id="mpaint" width="${pw}" height="${ph}" style="width:${m.w}px;height:${m.h}px"></canvas>
+      <svg id="mvec" width="${m.w}" height="${m.h}" viewBox="0 0 ${m.w} ${m.h}"></svg>
+      <div id="mpins"></div></div>
+    <div class="toolbar" id="mtools"></div>
     <div class="info hidden" id="minfo"></div></div>`;
-  M = { map: m, placing: false, view: null, w: m.w || 1000, h: m.h || 700 };
-  $('#mapSel').onchange = e => go('#/map/' + encodeURIComponent(e.target.value));
-  getMedia(m.img).then(d => {
-    if (!d) { $('#mstage').insertAdjacentHTML('beforeend', '<div class="centered"><div class="box"><p>This map image hasn’t reached this device yet. Sync to fetch it.</p></div></div>'); return; }
-    const img = $('#mimg'); img.onload = () => { M.w = img.naturalWidth; M.h = img.naturalHeight; img.style.width = M.w + 'px'; img.style.height = M.h + 'px'; $('#mview').style.width = M.w + 'px'; $('#mview').style.height = M.h + 'px'; fitMap(); };
-    img.src = d;
+  if (m.img) getMedia(m.img).then(d => { if (d) $('#mimg').src = d; else toast('This map’s image hasn’t reached this device yet. Sync to fetch it.', 4000); });
+  if (m.paint) getMedia(m.paint).then(d => {
+    if (!d || !$('#mpaint')) return;
+    const img = new Image(); img.onload = () => { const c = $('#mpaint'); if (c) c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); }; img.src = d;
   });
+  drawTools(); drawVec(); drawPins();
+  if (!M.view) fitMap(); else applyMap();
   bindMap();
 }
+function newEditState(tool) { return { tool: tool || 'select', paint: 'land', brush: 'M', pathStyle: 'road', zoneColor: ZONE_COLORS[0] }; }
+
+/* drawing */
+function drawTools() {
+  const m = M.map, e = M.edit, tb = $('#mtools');
+  if (!e) {
+    tb.innerHTML = `<div class="tools-row"><select id="mapSel">${W.maps.map(x => `<option value="${esc(x.id)}"${x.id === m.id ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
+      <button class="btn small solid" data-act="m-edit">Edit map</button><button class="btn small" data-act="m-fit">Fit</button>
+      <button class="btn small" data-act="m-new">New map</button><button class="btn small" data-act="m-menu">⋯</button></div>`;
+    $('#mapSel').onchange = ev => go('#/map/' + encodeURIComponent(ev.target.value));
+    $('#mstage').className = 'stage';
+    return;
+  }
+  const opt = [];
+  if (e.tool === 'paint') {
+    opt.push(Object.entries(PAINTS).map(([k, c]) => `<button class="sw${e.paint === k ? ' on' : ''}" data-act="m-paint" data-v="${k}" title="${k}" style="background:${c || 'repeating-linear-gradient(45deg,#333 0 4px,#777 4px 8px)'}"></button>`).join(''));
+    opt.push(Object.keys(BRUSH).map(k => `<button class="btn small${e.brush === k ? ' on' : ''}" data-act="m-brush" data-v="${k}">${k}</button>`).join(''));
+    opt.push('<span class="hint pill">Drag to paint · two fingers to move</span>');
+  } else if (e.tool === 'zone') {
+    opt.push(ZONE_COLORS.map(c => `<button class="sw${e.zoneColor === c ? ' on' : ''}" data-act="m-zcolor" data-v="${c}" style="background:${c}"></button>`).join(''));
+    opt.push(M.draft ? `<button class="btn small solid" data-act="m-finish">Finish zone</button><button class="btn small" data-act="m-cancel">Cancel</button>` : '');
+    opt.push(`<span class="hint pill">${M.draft ? 'Tap to add corners · tap the first corner to close' : 'Tap corners around an area · tapping a corner or edge of another zone joins the border'}</span>`);
+  } else if (e.tool === 'path') {
+    opt.push(Object.entries(PATH_STYLES).map(([k, s]) => `<button class="btn small${e.pathStyle === k ? ' on' : ''}" data-act="m-pstyle" data-v="${k}">${s.label}</button>`).join(''));
+    opt.push(M.draft ? `<button class="btn small solid" data-act="m-finish">Finish</button><button class="btn small" data-act="m-cancel">Cancel</button>` : '');
+    opt.push(`<span class="hint pill">${M.draft ? 'Tap to add points · tap the last point to finish' : 'Tap points along a road, river or border'}</span>`);
+  } else {
+    opt.push(`<span class="hint pill">${{ select: 'Tap a shape to edit it · drag corners, labels and pins', label: 'Tap where the label goes', pin: 'Tap where the pin goes' }[e.tool]}</span>`);
+  }
+  tb.innerHTML = `<div class="tools-row"><button class="btn small solid" data-act="m-done">Done</button>
+      <button class="btn small" data-act="m-undo"${M.undo.length ? '' : ' disabled'}>Undo</button>
+      ${MAP_TOOLS.map(([k, l]) => `<button class="btn small${e.tool === k ? ' on' : ''}" data-act="m-tool" data-v="${k}">${l}</button>`).join('')}</div>
+    <div class="tools-row">${opt.join('')}</div>`;
+  $('#mstage').className = 'stage editing tool-' + e.tool;
+}
+function drawVec() {
+  const m = M.map, s = mapScale(m), e = M.edit, sel = M.sel || {};
+  const P = id => m.points[id];
+  let h = '';
+  for (const z of m.zones) {
+    const pts = z.pts.map(P).filter(Boolean); if (pts.length < 3) continue;
+    const on = sel.t === 'zone' && sel.id === z.id;
+    h += `<polygon data-zone="${esc(z.id)}" points="${pts.map(p => p.x + ',' + p.y).join(' ')}" fill="${esc(z.color)}" fill-opacity="${on ? .42 : .24}"
+      stroke="${esc(z.color)}" stroke-width="${(on ? 5 : 3) * s}" stroke-linejoin="round"/>`;
+  }
+  for (const p of m.paths) {
+    const st = PATH_STYLES[p.style] || PATH_STYLES.road, on = sel.t === 'path' && sel.id === p.id, pts = p.pts.map(q => q.join(',')).join(' ');
+    h += `<polyline points="${pts}" fill="none" stroke="${st.color}" stroke-width="${st.w * s * (on ? 1.5 : 1)}" stroke-linecap="round" stroke-linejoin="round"${st.dash ? ` stroke-dasharray="${st.dash.split(' ').map(n => n * s).join(' ')}"` : ''}/>
+      <polyline class="hit" data-path="${esc(p.id)}" points="${pts}" fill="none" stroke="transparent" stroke-width="${24 * s}"/>`;
+  }
+  for (const z of m.zones) {
+    if (!z.name) continue;
+    const pts = z.pts.map(P).filter(Boolean); if (pts.length < 3) continue;
+    const cx = pts.reduce((a, p) => a + p.x, 0) / pts.length, cy = pts.reduce((a, p) => a + p.y, 0) / pts.length;
+    h += `<text class="zl" x="${cx}" y="${cy}" font-size="${26 * s}" text-anchor="middle" stroke-width="${5 * s}">${esc(z.name)}</text>`;
+  }
+  for (const l of m.labels) {
+    const on = sel.t === 'label' && sel.id === l.id;
+    h += `<text class="lb${on ? ' on' : ''}" data-label="${esc(l.id)}" x="${l.x}" y="${l.y}" font-size="${l.size}" fill="${esc(l.color)}" text-anchor="middle" stroke-width="${l.size * .16}">${esc(l.text)}</text>`;
+  }
+  if (e && (e.tool === 'select' || e.tool === 'zone')) {
+    const used = new Set(); m.zones.forEach(z => z.pts.forEach(id => used.add(id)));
+    used.forEach(id => { const p = P(id); if (p) h += `<circle class="h${sel.t === 'pt' && sel.id === id ? ' on' : ''}" data-pt="${esc(id)}" cx="${p.x}" cy="${p.y}"/>`; });
+  }
+  if (e && sel.t === 'path') {
+    const p = m.paths.find(x => x.id === sel.id);
+    if (p) p.pts.forEach((q, i) => { h += `<circle class="h" data-pp="${i}" cx="${q[0]}" cy="${q[1]}"/>`; });
+  }
+  if (M.draft && M.draft.pts.length) {
+    const d = M.draft, pts = d.pts.map(q => [q.x, q.y]);
+    const live = M.hover ? [...pts, [M.hover.x, M.hover.y]] : pts;
+    const col = d.kind === 'zone' ? e.zoneColor : (PATH_STYLES[e.pathStyle] || PATH_STYLES.road).color;
+    h += `<polyline points="${live.map(q => q.join(',')).join(' ')}" fill="none" stroke="${col}" stroke-width="${3 * s}" stroke-dasharray="${8 * s} ${6 * s}"/>`;
+    pts.forEach((q, i) => { h += `<circle class="h draft${i === 0 ? ' first' : ''}" cx="${q[0]}" cy="${q[1]}"/>`; });
+  }
+  $('#mvec').innerHTML = h;
+  sizeHandles();
+}
+function drawPins() {
+  const m = M.map, on = M.sel && M.sel.t === 'pin' ? M.sel.id : null;
+  $('#mpins').innerHTML = m.pins.map(p => {
+    const c = card(p.card); if (!c) return '';
+    return `<div class="pin${p.id === on ? ' on' : ''}" style="left:${p.x * 100}%;top:${p.y * 100}%">
+      <button data-pinbtn="${esc(p.id)}" aria-label="${esc(c.title)}"><svg viewBox="0 0 26 30"><path d="M13 29s10-9.5 10-16.5A10 10 0 0 0 3 12.5C3 19.5 13 29 13 29z" fill="${typeOf(c).color}" stroke="#0e1512" stroke-width="2"/><circle cx="13" cy="12.5" r="3.6" fill="#0e1512"/></svg></button>
+      <span class="pl">${esc(c.title)}</span></div>`;
+  }).join('');
+  applyMap();
+}
+function sizeHandles() {
+  if (!M.view) return;
+  const r = 7 / M.view.k;
+  document.querySelectorAll('#mvec .h').forEach(c => { c.setAttribute('r', c.classList.contains('first') ? r * 1.4 : r); c.setAttribute('stroke-width', 2 / M.view.k); });
+}
 function fitMap() {
-  const r = $('#mstage').getBoundingClientRect(), k = Math.min(r.width / M.w, (r.height - 50) / M.h);
-  M.view = { k, x: (r.width - M.w * k) / 2, y: 50 + (r.height - 50 - M.h * k) / 2 }; applyMap();
+  const r = $('#mstage').getBoundingClientRect(), top = M.edit ? 96 : 50, m = M.map;
+  const k = Math.min(r.width / m.w, (r.height - top) / m.h);
+  M.view = { k, x: (r.width - m.w * k) / 2, y: top + (r.height - top - m.h * k) / 2 }; applyMap();
 }
 function applyMap() {
   const v = M.view; if (!v) return;
   $('#mview').style.transform = `translate(${v.x}px,${v.y}px) scale(${v.k})`;
   document.querySelectorAll('.pin button').forEach(b => { b.style.transform = `scale(${1 / v.k})`; });
-  document.querySelectorAll('.pin .pl').forEach(l => { l.style.transform = `scale(${1 / v.k})`; l.classList.toggle('hidden', v.k * M.w < 500); });
+  document.querySelectorAll('.pin .pl').forEach(l => { l.style.transform = `scale(${1 / v.k})`; l.classList.toggle('hidden', v.k * M.map.w < 500); });
+  sizeHandles();
 }
+function redraw() { drawTools(); drawVec(); drawPins(); }
+
+/* undo + saving */
+function vecState() { const m = M.map; return JSON.stringify({ points: m.points, zones: m.zones, paths: m.paths, labels: m.labels, pins: m.pins }); }
+function pushUndo(entry) {
+  M.undo.push(entry);
+  const imgs = M.undo.filter(u => u.img);
+  if (imgs.length > 8) M.undo.splice(M.undo.indexOf(imgs[0]), 1);   // paint snapshots are big; keep the last 8
+  if (M.undo.length > 50) M.undo.shift();
+}
+const snapUndo = () => pushUndo({ v: vecState() });
+function undo() {
+  const u = M.undo.pop(); if (!u) return;
+  if (u.v) { Object.assign(M.map, JSON.parse(u.v)); touchMap(); }
+  else if (u.img) { $('#mpaint').getContext('2d').putImageData(u.img, 0, 0); M.paintDirty = true; }
+  M.sel = null; M.draft = null; hideInfo(); redraw();
+}
+function touchMap() { M.map.updated = Date.now(); changed(); }
+function commitPaint() {
+  const c = $('#mpaint'); if (!M || !M.paintDirty || !c) return;
+  M.paintDirty = false;
+  const data = c.toDataURL('image/png'), m = M.map, old = m.paint, id = uid('mp');
+  media[id] = data; idbPut('media', id, data);
+  m.paint = id;
+  if (old) { meta.mediaGone = [...(meta.mediaGone || []), old]; delete media[old]; idbDel('media', old).catch(() => {}); }
+  touchMap();
+}
+function gcPoints() {
+  const m = M.map, used = new Set(); m.zones.forEach(z => z.pts.forEach(id => used.add(id)));
+  Object.keys(m.points).forEach(id => { if (!used.has(id)) delete m.points[id]; });
+}
+
+/* paint */
+function startStroke(g, q) {
+  const c = $('#mpaint'), ctx = c.getContext('2d'), col = PAINTS[M.edit.paint];
+  g.before = ctx.getImageData(0, 0, c.width, c.height);
+  ctx.save();
+  ctx.globalCompositeOperation = col ? 'source-over' : 'destination-out';
+  ctx.strokeStyle = ctx.fillStyle = col || '#000';
+  ctx.lineWidth = BRUSH[M.edit.brush] * mapScale(M.map) * PAINT_SCALE;
+  ctx.lineCap = ctx.lineJoin = 'round';
+  g.ctx = ctx; g.last = q;
+  ctx.beginPath(); ctx.arc(q.x * PAINT_SCALE, q.y * PAINT_SCALE, ctx.lineWidth / 2, 0, Math.PI * 2); ctx.fill();
+}
+function strokeTo(g, q) {
+  const ctx = g.ctx; ctx.beginPath();
+  ctx.moveTo(g.last.x * PAINT_SCALE, g.last.y * PAINT_SCALE); ctx.lineTo(q.x * PAINT_SCALE, q.y * PAINT_SCALE); ctx.stroke();
+  g.last = q;
+}
+function endStroke(g) { g.ctx.restore(); pushUndo({ img: g.before }); M.paintDirty = true; drawTools(); }
+function cancelStroke(g) { g.ctx.restore(); g.ctx.putImageData(g.before, 0, 0); }
+
+/* zones + paths */
+function project(q, a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy || 1;
+  const t = Math.max(0, Math.min(1, ((q.x - a.x) * dx + (q.y - a.y) * dy) / l2));
+  const x = a.x + t * dx, y = a.y + t * dy;
+  return { x, y, t, d: Math.hypot(q.x - x, q.y - y) };
+}
+// Nearest existing corner, else nearest zone edge, within a finger's reach.
+function snapTarget(q) {
+  const m = M.map, r = 16 / M.view.k;
+  let best = null, bd = r;
+  for (const [id, p] of Object.entries(m.points)) { const d = Math.hypot(p.x - q.x, p.y - q.y); if (d < bd) { bd = d; best = { pt: id, x: p.x, y: p.y }; } }
+  if (best) return best;
+  for (const z of m.zones) for (let i = 0; i < z.pts.length; i++) {
+    const a = z.pts[i], b = z.pts[(i + 1) % z.pts.length], pa = m.points[a], pb = m.points[b];
+    if (!pa || !pb) continue;
+    const pr = project(q, pa, pb);
+    if (pr.d < bd && pr.t > .02 && pr.t < .98) { bd = pr.d; best = { edge: [a, b], x: pr.x, y: pr.y }; }
+  }
+  return best;
+}
+function insertOnEdge(a, b, id) {
+  for (const z of M.map.zones) for (let i = 0; i < z.pts.length; i++) {
+    const p = z.pts[i], n = z.pts[(i + 1) % z.pts.length];
+    if ((p === a && n === b) || (p === b && n === a)) { z.pts.splice(i + 1, 0, id); break; }
+  }
+}
+function addZonePoint(q) {
+  const d = M.draft || (M.draft = { kind: 'zone', pts: [] });
+  const snap = snapTarget(q), r = 16 / M.view.k;
+  if (d.pts.length >= 3) {
+    const f = d.pts[0];
+    if ((snap && snap.pt && snap.pt === f.pt) || Math.hypot(q.x - f.x, q.y - f.y) < r) return finishDraft();
+  }
+  const pt = snap ? { ...snap } : { x: Math.round(q.x), y: Math.round(q.y) };
+  const last = d.pts[d.pts.length - 1];
+  if (last && ((pt.pt && pt.pt === last.pt) || Math.hypot(pt.x - last.x, pt.y - last.y) < r / 2)) return;
+  d.pts.push(pt); redraw();
+}
+function addPathPoint(q) {
+  const d = M.draft || (M.draft = { kind: 'path', pts: [] });
+  const snap = snapTarget(q), r = 16 / M.view.k;
+  const pt = snap ? { x: snap.x, y: snap.y } : { x: Math.round(q.x), y: Math.round(q.y) };
+  const last = d.pts[d.pts.length - 1];
+  if (last && Math.hypot(pt.x - last.x, pt.y - last.y) < r) { if (d.pts.length >= 2) finishDraft(); return; }
+  d.pts.push(pt); redraw();
+}
+function finishDraft() {
+  const d = M.draft, m = M.map; if (!d) return;
+  M.draft = null; M.hover = null;
+  if (d.kind === 'zone') {
+    if (d.pts.length < 3) { toast('A zone needs at least 3 corners'); return redraw(); }
+    snapUndo();
+    const ids = d.pts.map(p => {
+      if (p.pt) return p.pt;
+      const id = uid('v'); m.points[id] = { x: Math.round(p.x), y: Math.round(p.y) };
+      if (p.edge) insertOnEdge(p.edge[0], p.edge[1], id);
+      return id;
+    });
+    const z = { id: uid('z'), name: '', color: M.edit.zoneColor, card: null, pts: ids };
+    m.zones.push(z); touchMap();
+    M.edit.tool = 'select'; select({ t: 'zone', id: z.id });
+  } else {
+    if (d.pts.length < 2) { toast('A path needs at least 2 points'); return redraw(); }
+    snapUndo();
+    const p = { id: uid('l'), name: '', style: M.edit.pathStyle, pts: d.pts.map(q => [Math.round(q.x), Math.round(q.y)]) };
+    m.paths.push(p); touchMap();
+    M.edit.tool = 'select'; select({ t: 'path', id: p.id });
+  }
+}
+function addLabel(q) {
+  const text = prompt('Label text'); if (!text || !text.trim()) return;
+  snapUndo();
+  const l = { id: uid('t'), x: Math.round(q.x), y: Math.round(q.y), text: text.trim(), size: Math.round(34 * mapScale(M.map)), color: '#e9e0c9' };
+  M.map.labels.push(l); touchMap(); select({ t: 'label', id: l.id });
+}
+function addPin(q) {
+  const m = M.map, x = q.x / m.w, y = q.y / m.h;
+  if (x < 0 || y < 0 || x > 1 || y > 1) return;
+  pickCard({ title: 'What goes here?', onPick: id => { snapUndo(); m.pins.push({ id: uid('p'), x: +x.toFixed(4), y: +y.toFixed(4), card: id }); touchMap(); drawPins(); } });
+}
+
+/* selection + info panel */
+function hideInfo() { const i = $('#minfo'); if (i) i.classList.add('hidden'); }
+function select(s) { M.sel = s; redraw(); s ? showProps() : hideInfo(); }
+function selected() {
+  const m = M.map, s = M.sel; if (!s) return null;
+  return { zone: () => m.zones.find(z => z.id === s.id), path: () => m.paths.find(p => p.id === s.id), label: () => m.labels.find(l => l.id === s.id),
+    pin: () => m.pins.find(p => p.id === s.id), pt: () => m.points[s.id] }[s.t]();
+}
+function cardChip(id) { const c = card(id); return c ? `<button class="btn small" data-id="${esc(c.id)}">Open ${esc(c.title)}</button>` : ''; }
+function showProps() {
+  const s = M.sel, it = selected(), info = $('#minfo');
+  if (!it) return hideInfo();
+  let h = '';
+  if (s.t === 'zone') h = `<span class="hint">Zone</span><input class="inp" data-mprop="name" value="${esc(it.name)}" placeholder="Name this zone" style="width:100%;margin:6px 0">
+    <div class="row">${ZONE_COLORS.map(c => `<button class="sw${it.color === c ? ' on' : ''}" data-act="m-zcolor" data-v="${c}" style="background:${c}"></button>`).join('')}</div>
+    <div class="row" style="margin-top:8px">${it.card ? cardChip(it.card) + '<button class="btn small" data-act="m-unlink">Unlink</button>' : '<button class="btn small" data-act="m-link">Link a card</button>'}
+      <button class="btn small danger" data-act="m-del">Delete zone</button></div>`;
+  if (s.t === 'path') h = `<span class="hint">${(PATH_STYLES[it.style] || PATH_STYLES.road).label}</span><input class="inp" data-mprop="name" value="${esc(it.name)}" placeholder="Name (optional)" style="width:100%;margin:6px 0">
+    <div class="row">${Object.entries(PATH_STYLES).map(([k, st]) => `<button class="btn small${it.style === k ? ' on' : ''}" data-act="m-pstyle" data-v="${k}">${st.label}</button>`).join('')}
+      <button class="btn small danger" data-act="m-del">Delete</button></div>`;
+  if (s.t === 'label') h = `<span class="hint">Label</span><input class="inp" data-mprop="text" value="${esc(it.text)}" style="width:100%;margin:6px 0">
+    <div class="row">${[['S', 22], ['M', 34], ['L', 56], ['XL', 90]].map(([k, n]) => `<button class="btn small${Math.round(n * mapScale(M.map)) === it.size ? ' on' : ''}" data-act="m-lsize" data-v="${n}">${k}</button>`).join('')}
+      ${['#e9e0c9', '#0e1512', '#ffca7a', '#5be0c8'].map(c => `<button class="sw${it.color === c ? ' on' : ''}" data-act="m-lcolor" data-v="${c}" style="background:${c}"></button>`).join('')}
+      <button class="btn small danger" data-act="m-del">Delete</button></div>`;
+  if (s.t === 'pin') h = `<span class="hint">Pin</span><div class="row" style="margin-top:6px">${cardChip(it.card)}<button class="btn small danger" data-act="m-del">Remove pin</button></div>`;
+  if (s.t === 'pt') h = `<span class="hint">Corner · shared by ${M.map.zones.filter(z => z.pts.includes(s.id)).length} zone(s)</span><div class="row" style="margin-top:6px"><button class="btn small danger" data-act="m-del">Delete corner</button></div>`;
+  info.innerHTML = h; info.classList.remove('hidden');
+  info.querySelectorAll('[data-mprop]').forEach(inp => {
+    inp.oninput = () => { it[inp.dataset.mprop] = inp.value; drawVec(); clearTimeout(inp._t); inp._t = setTimeout(touchMap, 600); };
+  });
+}
+function showInfo(kind, id) {
+  const m = M.map, info = $('#minfo');
+  let title = '', c = null, extra = '';
+  if (kind === 'pin') { const p = m.pins.find(x => x.id === id); c = p && card(p.card); title = c ? c.title : ''; }
+  if (kind === 'zone') { const z = m.zones.find(x => x.id === id); if (!z) return; c = z.card && card(z.card); title = z.name || (c ? c.title : 'Unnamed zone'); }
+  if (kind === 'path') { const p = m.paths.find(x => x.id === id); if (!p) return; title = p.name || (PATH_STYLES[p.style] || PATH_STYLES.road).label; extra = 'No card linked'; }
+  if (!title) return hideInfo();
+  const t = c && typeOf(c);
+  info.innerHTML = `${t ? `<span class="badge" style="color:${t.color};border-color:${t.color}">${t.icon} ${t.label}</span>` : ''}<h4>${esc(title)}</h4>
+    <p>${c ? esc(excerpt(c, 200)) || '<i>Nothing written yet.</i>' : `<i>${extra || 'No card linked yet. Edit the map to link one.'}</i>`}</p>
+    ${c ? `<div class="row"><button class="btn small solid" data-id="${esc(c.id)}">Open</button></div>` : ''}`;
+  info.classList.remove('hidden');
+}
+function deleteSel() {
+  const m = M.map, s = M.sel; if (!s) return;
+  snapUndo();
+  if (s.t === 'zone') { m.zones = m.zones.filter(z => z.id !== s.id); gcPoints(); }
+  if (s.t === 'path') m.paths = m.paths.filter(p => p.id !== s.id);
+  if (s.t === 'label') m.labels = m.labels.filter(l => l.id !== s.id);
+  if (s.t === 'pin') m.pins = m.pins.filter(p => p.id !== s.id);
+  if (s.t === 'pt') { m.zones.forEach(z => { z.pts = z.pts.filter(id => id !== s.id); }); m.zones = m.zones.filter(z => z.pts.length >= 3); gcPoints(); }
+  touchMap(); select(null);
+}
+
+/* modes */
+function enterEdit(tool) { M.edit = newEditState(tool); M.sel = null; hideInfo(); redraw(); fitMap(); }
+function exitEdit(quiet) {
+  if (!M) return;
+  commitPaint(); M.edit = null; M.draft = null; M.sel = null; M.hover = null;
+  if (!quiet) { hideInfo(); redraw(); }
+}
+function setTool(t) {
+  if (M.edit.tool === 'paint' && t !== 'paint') commitPaint();
+  if (M.draft && t !== M.draft.kind) M.draft = null;
+  M.edit.tool = t; M.sel = null; hideInfo(); redraw();
+}
+function mapAct(a, el) {
+  const v = el.dataset.v, it = M && selected();
+  switch (a) {
+    case 'new': return newMap();
+    case 'fit': return fitMap();
+    case 'edit': return enterEdit();
+    case 'done': return exitEdit();
+    case 'undo': return undo();
+    case 'tool': return setTool(v);
+    case 'paint': M.edit.paint = v; return drawTools();
+    case 'brush': M.edit.brush = v; return drawTools();
+    case 'finish': return finishDraft();
+    case 'cancel': M.draft = null; M.hover = null; return redraw();
+    case 'del': return deleteSel();
+    case 'zcolor':
+      if (M.edit) M.edit.zoneColor = v;
+      if (M.sel && M.sel.t === 'zone') { snapUndo(); it.color = v; touchMap(); return select(M.sel); }
+      return drawTools();
+    case 'pstyle':
+      if (M.edit) M.edit.pathStyle = v;
+      if (M.sel && M.sel.t === 'path') { snapUndo(); it.style = v; touchMap(); return select(M.sel); }
+      return drawTools();
+    case 'lsize': snapUndo(); it.size = Math.round(+v * mapScale(M.map)); touchMap(); return select(M.sel);
+    case 'lcolor': snapUndo(); it.color = v; touchMap(); return select(M.sel);
+    case 'link': return pickCard({ title: 'Link this zone to…', onPick: id => { it.card = id; if (!it.name) it.name = card(id).title; touchMap(); select(M.sel); } });
+    case 'unlink': it.card = null; touchMap(); return select(M.sel);
+    case 'menu': {
+      const m = M.map;
+      const choice = prompt(`Rename “${m.name}”, or type DELETE to remove this map.`, m.name);
+      if (choice === null) return;
+      if (choice.trim() === 'DELETE') {
+        W.deleted[m.id] = Date.now(); W.maps = W.maps.filter(x => x.id !== m.id);
+        if (m.paint) meta.mediaGone = [...(meta.mediaGone || []), m.paint];
+        ui.mapId = null; M = null; changed(); return go('#/map');
+      }
+      if (choice.trim()) { m.name = choice.trim(); touchMap(); drawTools(); }
+      return;
+    }
+  }
+}
+
+/* pointer input: one finger uses the tool (or pans in view mode), two fingers pan and zoom */
 function bindMap() {
-  const st = $('#mstage'), pts = new Map(); let drag = null;
+  const st = $('#mstage'), pts = new Map(); let g = null;
   const local = e => { const r = st.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  const toMap = p => ({ x: (p.x - M.view.x) / M.view.k, y: (p.y - M.view.y) / M.view.k });
+  const attr = (t, sel, k) => { const el = t.closest(sel); return el ? el.getAttribute(k) : null; };
   st.addEventListener('pointerdown', e => {
-    if (e.target.closest('.toolbar,.info')) return;
+    if (e.target.closest('.toolbar,.info') || !M.view) return;
     st.setPointerCapture(e.pointerId); pts.set(e.pointerId, local(e));
-    if (!M.view) return;
-    if (pts.size === 2) { const [a, b] = [...pts.values()]; drag = { kind: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y), v0: { ...M.view }, m: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } }; return; }
-    const pin = e.target.closest('[data-pinbtn]');
-    drag = { kind: 'pan', pin: pin && pin.dataset.pinbtn, p0: local(e), v0: { ...M.view }, moved: false };
+    if (pts.size === 2) {
+      if (g && g.kind === 'paint') cancelStroke(g);
+      const [a, b] = [...pts.values()];
+      g = { kind: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y), v0: { ...M.view }, m: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
+      return;
+    }
+    if (pts.size > 2) return;
+    const p = local(e), q = toMap(p), t = e.target, tool = M.edit && M.edit.tool;
+    const hit = { pt: attr(t, '[data-pt]', 'data-pt'), pp: attr(t, '[data-pp]', 'data-pp'), label: attr(t, '[data-label]', 'data-label'),
+      pin: attr(t, '[data-pinbtn]', 'data-pinbtn'), zone: attr(t, '[data-zone]', 'data-zone'), path: attr(t, '[data-path]', 'data-path') };
+    g = { kind: 'tap', p0: p, q0: q, v0: { ...M.view }, hit, moved: false };
+    if (tool === 'paint') { g.kind = 'paint'; startStroke(g, q); }
+    else if (tool === 'select' && (hit.pt || hit.pp !== null || hit.label || hit.pin)) { g.kind = 'drag'; g.before = vecState(); }
   });
   st.addEventListener('pointermove', e => {
-    if (!pts.has(e.pointerId) || !drag) return;
-    pts.set(e.pointerId, local(e)); const p = local(e);
-    if (drag.kind === 'pinch' && pts.size === 2) {
-      const [a, b] = [...pts.values()], k = Math.max(.05, Math.min(8, drag.v0.k * Math.hypot(a.x - b.x, a.y - b.y) / drag.d0));
-      M.view = { k, x: drag.m.x - (drag.m.x - drag.v0.x) * k / drag.v0.k, y: drag.m.y - (drag.m.y - drag.v0.y) * k / drag.v0.k }; applyMap(); return;
+    if (!pts.has(e.pointerId)) {
+      if (M && M.draft && e.pointerType === 'mouse' && M.view) { M.hover = toMap(local(e)); drawVec(); }
+      return;
     }
-    if (drag.kind === 'pinch') return;
-    if (Math.hypot(p.x - drag.p0.x, p.y - drag.p0.y) > 5) drag.moved = true;
-    if (drag.moved) { M.view.x = drag.v0.x + p.x - drag.p0.x; M.view.y = drag.v0.y + p.y - drag.p0.y; applyMap(); }
+    pts.set(e.pointerId, local(e));
+    if (!g) return;
+    const p = local(e), q = toMap(p);
+    if (g.kind === 'pinch') {
+      if (pts.size < 2) return;
+      const [a, b] = [...pts.values()], k = Math.max(.05, Math.min(10, g.v0.k * Math.hypot(a.x - b.x, a.y - b.y) / g.d0));
+      M.view = { k, x: g.m.x - (g.m.x - g.v0.x) * k / g.v0.k, y: g.m.y - (g.m.y - g.v0.y) * k / g.v0.k }; applyMap(); return;
+    }
+    if (g.kind === 'paint') return strokeTo(g, q);
+    if (Math.hypot(p.x - g.p0.x, p.y - g.p0.y) > 5) g.moved = true;
+    if (!g.moved) return;
+    if (g.kind === 'drag') {
+      const m = M.map, h = g.hit, x = Math.round(q.x), y = Math.round(q.y);
+      if (h.pt) m.points[h.pt] = { x, y };
+      else if (h.pp !== null) { const path = m.paths.find(pa => pa.id === M.sel.id); path.pts[+h.pp] = [x, y]; }
+      else if (h.label) { const l = m.labels.find(l => l.id === h.label); l.x = x; l.y = y; }
+      else if (h.pin) { const pin = m.pins.find(pi => pi.id === h.pin); pin.x = +(q.x / m.w).toFixed(4); pin.y = +(q.y / m.h).toFixed(4); return drawPins(); }
+      return drawVec();
+    }
+    M.view.x = g.v0.x + p.x - g.p0.x; M.view.y = g.v0.y + p.y - g.p0.y; applyMap();
   });
   const end = e => {
     pts.delete(e.pointerId);
-    if (!drag || drag.kind === 'pinch') { if (!pts.size) drag = null; return; }
-    const d = drag; drag = null;
-    if (d.moved) return;
-    if (d.pin) return showPin(d.pin);
-    if (M.placing) {
-      const x = (d.p0.x - M.view.x) / M.view.k / M.w, y = (d.p0.y - M.view.y) / M.view.k / M.h;
-      if (x < 0 || y < 0 || x > 1 || y > 1) return;
-      setPlacing(false);
-      pickCard({ title: 'What goes here?', onPick: id => { M.map.pins.push({ id: uid('p'), x: +x.toFixed(4), y: +y.toFixed(4), card: id }); M.map.updated = Date.now(); changed(); render(); } });
-    } else $('#minfo').classList.add('hidden');
+    const d = g; if (!d) return;
+    if (d.kind === 'pinch') { if (!pts.size) g = null; return; }
+    g = null;
+    if (d.kind === 'paint') return endStroke(d);
+    if (d.kind === 'drag') {
+      if (d.moved) { pushUndo({ v: d.before }); touchMap(); drawTools(); return; }
+      const h = d.hit;
+      return select(h.pin ? { t: 'pin', id: h.pin } : h.label ? { t: 'label', id: h.label } : h.pt ? { t: 'pt', id: h.pt } : M.sel);
+    }
+    if (!d.moved) tap(d);
   };
   st.addEventListener('pointerup', end); st.addEventListener('pointercancel', end);
   st.addEventListener('wheel', e => {
     if (!M.view) return; e.preventDefault();
-    const p = local(e), v = M.view, k = Math.max(.05, Math.min(8, v.k * Math.exp(-e.deltaY * .0015)));
+    const p = local(e), v = M.view, k = Math.max(.05, Math.min(10, v.k * Math.exp(-e.deltaY * .0015)));
     M.view = { k, x: p.x - (p.x - v.x) * k / v.k, y: p.y - (p.y - v.y) * k / v.k }; applyMap();
   }, { passive: false });
 }
-function setPlacing(on) { M.placing = on; $('#mstage').classList.toggle('placing', on); $('#pinMode').classList.toggle('on', on); $('#pinMode').textContent = on ? 'Tap the map…' : '+ Pin'; }
-function showPin(pid) {
-  const p = M.map.pins.find(x => x.id === pid), c = p && card(p.card); if (!c) return;
-  const t = typeOf(c), info = $('#minfo');
-  info.innerHTML = `<span class="badge" style="color:${t.color};border-color:${t.color}">${t.icon} ${t.label}</span><h4>${esc(c.title)}</h4>
-    <p>${esc(excerpt(c, 200)) || '<i>Nothing written yet.</i>'}</p>
-    <div class="row"><button class="btn small solid" data-id="${esc(c.id)}">Open</button><button class="btn small danger" data-delpin="${esc(pid)}">Remove pin</button></div>`;
-  info.classList.remove('hidden');
+function tap(d) {
+  const h = d.hit, q = d.q0;
+  if (!M.edit) {
+    if (h.pin) return showInfo('pin', h.pin);
+    if (h.zone) return showInfo('zone', h.zone);
+    if (h.path) return showInfo('path', h.path);
+    return hideInfo();
+  }
+  switch (M.edit.tool) {
+    case 'select': return select(h.zone ? { t: 'zone', id: h.zone } : h.path ? { t: 'path', id: h.path } : null);
+    case 'zone': return addZonePoint(q);
+    case 'path': return addPathPoint(q);
+    case 'label': return addLabel(q);
+    case 'pin': return addPin(q);
+  }
 }
-async function newMap() {
-  const f = await chooseFile('image/*'); if (!f) return;
-  const name = prompt('Name this map', f.name.replace(/\.[^.]+$/, '')) || 'Map';
-  try {
-    toast('Resizing…');
-    const img = await shrinkImage(f, 2400);
-    const id = await storeMedia(img.data);
-    const m = { id: uid('map'), name, img: id, w: img.w, h: img.h, pins: [], updated: Date.now() };
-    W.maps.push(m); changed(); go('#/map/' + encodeURIComponent(m.id));
-  } catch (e) { toast(e.message, 4000); }
+document.addEventListener('keydown', e => {
+  if (!mapEditing() || e.target.closest('input,textarea,select')) return;
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); return undo(); }
+  if ((e.key === 'Delete' || e.key === 'Backspace') && M.sel) { e.preventDefault(); return deleteSel(); }
+  if (e.key === 'Enter' && M.draft) return finishDraft();
+  if (e.key === 'Escape') { if (M.draft) { M.draft = null; M.hover = null; return redraw(); } return select(null); }
+});
+
+/* new maps */
+function newMap() {
+  const box = modal(`<h2>New map</h2><p>Paint a world from scratch, or upload map art you drew.</p>
+    <input class="inp" id="nmName" placeholder="Map name" style="width:100%;margin-bottom:10px">
+    <div class="typegrid">${Object.entries(BGS).map(([k, c]) => `<button data-bg="${k}"><span class="sw" style="background:${c};width:18px;height:18px"></span>Blank · ${k}</button>`).join('')}
+      <button data-up="1">⤒ Upload an image</button></div>
+    <div class="row"><button class="btn" data-close>Cancel</button></div>`);
+  box.querySelector('.typegrid').onclick = async e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const name = box.querySelector('#nmName').value.trim() || 'Map';
+    let m;
+    if (b.dataset.bg) {
+      box.remove();
+      m = { id: uid('map'), name, w: 2000, h: 1400, bg: BGS[b.dataset.bg] };
+      pendingTool = 'paint';
+    } else {
+      const f = await chooseFile('image/*'); if (!f) return;
+      box.remove();
+      try {
+        toast('Resizing…');
+        const img = await shrinkImage(f, 2400);
+        m = { id: uid('map'), name, img: await storeMedia(img.data), w: img.w, h: img.h };
+      } catch (err) { return toast(err.message, 4000); }
+    }
+    W.maps.push(normalizeMap(Object.assign(m, { updated: Date.now() }))); changed();
+    go('#/map/' + encodeURIComponent(m.id));
+  };
+  setTimeout(() => box.querySelector('#nmName').focus(), 30);
+}
+function normalizeMap(m) {
+  m.pins = m.pins || []; m.points = m.points || {}; m.zones = m.zones || []; m.paths = m.paths || []; m.labels = m.labels || [];
+  return m;
 }
 
 /* ---------- timeline ---------- */
@@ -1157,30 +1605,43 @@ async function doSync(opts) {
     await saveLocal();
     await pullMedia();
     setSync('ok', 'Synced ' + new Date().toLocaleTimeString());
-    if (!wasEditing && (remoteChanged || opts.render)) render();
+    if (!wasEditing && !mapEditing() && (remoteChanged || opts.render)) render();
   } catch (e) {
     setSync('err', e.message);
     if (opts.loud) toast(e.message, 6000);
   }
 }
-function mediaIds() { const s = new Set(); W.cards.forEach(c => c.img && s.add(c.img)); W.maps.forEach(m => m.img && s.add(m.img)); return [...s]; }
+function mediaIds() { const s = new Set(); W.cards.forEach(c => c.img && s.add(c.img)); W.maps.forEach(m => { if (m.img) s.add(m.img); if (m.paint) s.add(m.paint); }); return [...s]; }
+const mediaPath = id => MEDIA_DIR + id + (id.startsWith('mp') ? '.png' : '.jpg');
 async function pushMedia() {
   const done = new Set(meta.syncedMedia);
   for (const id of mediaIds()) {
     if (done.has(id)) continue;
     const d = await getMedia(id); if (!d) continue;
-    const r = await api(MEDIA_DIR + id + '.jpg', { method: 'PUT', body: JSON.stringify({ message: 'Codex: add image', content: d.split(',')[1], branch: gh.branch }) });
+    const r = await api(mediaPath(id), { method: 'PUT', body: JSON.stringify({ message: 'Codex: add image', content: d.split(',')[1], branch: gh.branch }) });
     if (r.ok || r.status === 422) { done.add(id); meta.syncedMedia = [...done]; }
     else throw new Error(await ghError(r));
+  }
+  const live = new Set(mediaIds());
+  for (const id of [...(meta.mediaGone || [])]) {
+    if (!live.has(id)) {
+      const r = await api(mediaPath(id));
+      if (r.ok) {
+        const sha = (await r.json()).sha;
+        const del = await api(mediaPath(id), { method: 'DELETE', body: JSON.stringify({ message: 'Codex: remove old map paint', sha, branch: gh.branch }) });
+        if (!del.ok && del.status !== 404) continue;
+      } else if (r.status !== 404) continue;
+    }
+    meta.mediaGone = meta.mediaGone.filter(x => x !== id); meta.syncedMedia = meta.syncedMedia.filter(x => x !== id);
   }
 }
 async function pullMedia() {
   const have = new Set(await idbKeys('media').catch(() => []));
   for (const id of mediaIds()) {
     if (have.has(id)) continue;
-    const r = await api(MEDIA_DIR + id + '.jpg', { raw: true }); if (!r.ok) continue;
-    const blob = await r.blob();
-    const d = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(new Blob([blob], { type: 'image/jpeg' })); });
+    const r = await api(mediaPath(id), { raw: true }); if (!r.ok) continue;
+    const blob = await r.blob(), type = id.startsWith('mp') ? 'image/png' : 'image/jpeg';
+    const d = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(new Blob([blob], { type })); });
     media[id] = d; await idbPut('media', id, d);
     if (!meta.syncedMedia.includes(id)) meta.syncedMedia.push(id);
   }
@@ -1258,9 +1719,8 @@ document.addEventListener('click', async e => {
   if (stb) { const c = card(route().id); setStatus(c, stb.dataset.status); toast(STATUSES[stb.dataset.status].label + ': ' + c.title); const n = nextToReview(c.id); return n ? openCard(n.id) : render(); }
   const dr = t.closest('[data-delrel]');
   if (dr) { W.deleted[dr.dataset.delrel] = Date.now(); W.relations = W.relations.filter(r => r.id !== dr.dataset.delrel); changed(); return render(); }
-  const dp = t.closest('[data-delpin]');
-  if (dp) { M.map.pins = M.map.pins.filter(p => p.id !== dp.dataset.delpin); M.map.updated = Date.now(); changed(); return render(); }
   const act = t.closest('[data-act]'); if (!act || act.tagName === 'SELECT') return;
+  if (act.dataset.act.startsWith('m-')) return mapAct(act.dataset.act.slice(2), act);
   const c = W && route().id ? card(route().id) : null;
   switch (act.dataset.act) {
     case 'settings': return openSettings();
@@ -1287,17 +1747,6 @@ document.addEventListener('click', async e => {
     case 'tog-v35': ui.showV35 = !ui.showV35; saveJSON(UI_KEY, ui); G.keep = false; return render();
     case 'relayout': layoutGraph(G.nodes, G.edges, true); changed(); G.keep = false; return render();
     case 'fit': return fitGraph();
-    case 'new-map': return newMap();
-    case 'fit-map': return fitMap();
-    case 'pin-mode': return setPlacing(!M.placing);
-    case 'map-menu': {
-      const m = M.map;
-      const choice = prompt(`Rename “${m.name}”, or type DELETE to remove this map (its pins go too).`, m.name);
-      if (choice === null) return;
-      if (choice.trim() === 'DELETE') { W.deleted[m.id] = Date.now(); W.maps = W.maps.filter(x => x.id !== m.id); ui.mapId = null; changed(); return go('#/map'); }
-      if (choice.trim()) { m.name = choice.trim(); m.updated = Date.now(); changed(); render(); }
-      return;
-    }
     case 'new-event': return newCard('event');
   }
 });
@@ -1320,7 +1769,11 @@ $('#menuBtn').onclick = () => document.body.classList.toggle('side-open');
 $('#scrim').onclick = () => document.body.classList.remove('side-open');
 $('#newBtn').onclick = () => { if (!W) return; document.body.classList.remove('side-open'); pickType('New card', t => newCard(t)); };
 $('#syncBtn').onclick = openSettings;
-document.addEventListener('visibilitychange', () => { if (document.hidden && meta.dirty && gh.token) sync(); });
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) return;
+  if (mapEditing()) commitPaint();
+  if (meta.dirty && gh.token) sync();
+});
 window.addEventListener('beforeunload', e => { if (editing && editing.dirty) { e.preventDefault(); e.returnValue = ''; } });
 
 (async function boot() {
