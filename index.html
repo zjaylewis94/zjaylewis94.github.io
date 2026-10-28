@@ -219,7 +219,7 @@ var DEFAULT_BOOKS = {
     { title:"Figma Boards", kind:"app",  emblem:"◈", color:"#38bcd4", url:"https://figma.com", h:218, lean:true },
   ],
   "Genesis": [
-    { title:"Codex", kind:"private", emblem:"✦", color:"#7c6cff", h:244 },
+    { title:"Codex", kind:"app", emblem:"✦", color:"#7c6cff", h:244, url:"https://zjaylewis94.github.io/codex/" },
   ]
 };
 
@@ -229,9 +229,9 @@ function loadBooks(){
     if(s){
       var b=JSON.parse(s);
       // Books that went live after a device saved its own shelves: open them there too
-      var LIVE={ "Cook Book":"https://zjaylewis94.github.io/cook_book/" };
+      var LIVE={ "Cook Book":"https://zjaylewis94.github.io/cook_book/", "Codex":"https://zjaylewis94.github.io/codex/" };
       Object.keys(b).forEach(function(shelf){ (b[shelf]||[]).forEach(function(x){
-        if(LIVE[x.title] && x.kind==='soon' && !x.url){ x.kind='app'; x.url=LIVE[x.title]; }
+        if(LIVE[x.title] && (x.kind==='soon' || x.kind==='private') && !x.url){ x.kind='app'; x.url=LIVE[x.title]; }
       }); });
       return b;
     }
