@@ -128,6 +128,54 @@ a.wl.missing{color:var(--bad);border-bottom-color:rgba(224,112,91,.5)}
 .empty-body{color:var(--smoke);font-style:italic}
 section.sub{margin-top:30px}
 .caption{font-style:italic;color:var(--smoke);font-size:16px;margin:-8px 0 16px}
+/* timeline + calendar */
+.tlwrap{position:absolute;inset:0;display:flex;flex-direction:column}
+.tl-head{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 12px;background:var(--glass);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);border-bottom:1px solid var(--line)}
+.seg{display:flex;gap:2px}
+#tlbody{flex:1;overflow:auto;position:relative;-webkit-overflow-scrolling:touch}
+.tlin{position:relative;min-width:100%}
+.tlera{position:absolute;height:24px;border-radius:12px;font-family:var(--ui);font-weight:700;font-size:13px;padding:3px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#0e1512;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.3)}
+.tlshade{position:absolute;top:0;bottom:0;opacity:.07;pointer-events:none}
+.tlaxis{position:absolute;left:0;height:2px;background:var(--brass-dim)}
+.tltick{position:absolute;font-family:var(--ui);font-size:12px;color:var(--smoke);transform:translateX(-50%);white-space:nowrap}
+.tltick b{color:var(--paper)}
+.tlmark{position:absolute;width:1px;height:12px;background:var(--brass-dim)}
+.tlev{position:absolute;width:180px;height:64px;display:flex;gap:8px;align-items:center;padding:6px 8px 6px 12px;border-radius:12px;background:rgba(19,30,25,.72);
+  -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);border:1px solid rgba(233,224,201,.12);text-decoration:none;color:var(--paper);overflow:hidden;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.3)}
+.tlev:hover{border-color:var(--brass-dim)}
+.tlev img,.tlev .noimg{width:48px;height:48px;border-radius:8px;object-fit:cover;flex:none;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.25);font-size:22px}
+.tlev .strip{position:absolute;left:0;top:0;bottom:0;width:4px}
+.tlev .tt{min-width:0}
+.tlev b{font-size:15px;display:block;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tlev small{font-family:var(--ui);font-size:12px;color:var(--lamp)}
+.tlstem{position:absolute;width:1px;background:rgba(233,224,201,.22)}
+.tldot{position:absolute;width:11px;height:11px;border-radius:50%;transform:translate(-50%,-50%);border:2px solid var(--ink)}
+.tlrange{position:absolute;height:5px;border-radius:3px;opacity:.85}
+.tl-undated{padding:16px 18px 40px;max-width:900px}
+.cal{padding:12px;max-width:1150px;margin:0 auto}
+.calgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.calwd{font-family:var(--ui);font-size:12px;color:var(--smoke);text-align:center;letter-spacing:.1em;text-transform:uppercase}
+.calday{min-height:104px;border-radius:10px;background:rgba(19,30,25,.55);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);border:1px solid rgba(233,224,201,.08);
+  padding:5px;font-family:var(--ui);font-size:13px;cursor:pointer;overflow:hidden;min-width:0}
+.calday:hover{border-color:var(--brass-dim)}
+.calday.blank{background:transparent;border:0;cursor:default;-webkit-backdrop-filter:none;backdrop-filter:none}
+.calday .n{color:var(--smoke);font-weight:700}
+.calday .ce{display:flex;gap:4px;align-items:center;margin-top:3px;font-size:12px;color:var(--paper);background:rgba(0,0,0,.3);border-radius:6px;padding:2px 4px;text-decoration:none;min-width:0}
+.calday .ce span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.calday .ce img{width:24px;height:24px;border-radius:4px;object-fit:cover;flex:none}
+.calday .span{height:4px;border-radius:2px;margin-top:3px}
+.calyear{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.calmini{background:rgba(19,30,25,.55);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);border-radius:12px;padding:8px 10px;cursor:pointer;border:1px solid rgba(233,224,201,.08)}
+.calmini:hover{border-color:var(--brass-dim)}
+.calmini h4{font-family:var(--ui);color:var(--brass);font-size:13px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.calmini .g{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;font-family:var(--ui);font-size:11px;color:var(--smoke);text-align:center}
+.calmini .g span.has{color:var(--ink);background:var(--lamp);border-radius:50%;font-weight:700}
+@media (max-width:820px){
+  .calday{min-height:60px;padding:3px;font-size:11px}
+  .calday .ce{padding:1px}
+  .calday .ce span{display:none}
+  .calgrid{gap:3px}
+}
 .emblem{width:46px;height:46px;border-radius:10px;object-fit:contain;vertical-align:middle;margin-right:10px;background:rgba(0,0,0,.25)}
 .item img.ic{width:16px;height:16px;border-radius:4px;object-fit:contain;flex:none}
 .bgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:8px}
@@ -386,7 +434,7 @@ const idbDel = (s, k) => idb(s, 'readwrite', st => st.delete(k));
 const idbKeys = s => idb(s, 'readonly', st => st.getAllKeys());
 
 /* ---------- world ---------- */
-function blankWorld() { return { format: 'codex2', version: 1, updated: Date.now(), cards: [], relations: [], maps: [], canvas: {}, deleted: {}, backgrounds: [], theme: {} }; }
+function blankWorld() { return { format: 'codex2', version: 1, updated: Date.now(), cards: [], relations: [], maps: [], canvas: {}, deleted: {}, backgrounds: [], theme: {}, eras: [] }; }
 function normalize(w) {
   w = Object.assign(blankWorld(), w || {});
   w.cards = (w.cards || []).map(c => Object.assign({ aliases: [], tags: [], fields: [], status: 'draft', parent: null, body: '', autolink: true, type: 'note', order: 0 }, c));
@@ -619,7 +667,8 @@ function renderCard(c) {
     ${crumbs.length ? `<div class="crumbs">${crumbs.map(p => `<a class="wl" data-id="${esc(p.id)}">${esc(p.title)}</a>`).join(' › ')} ›</div>` : ''}
     <div class="badges"><span class="badge" style="color:${t.color};border-color:${t.color}">${t.icon} ${t.label}</span>
       <span class="badge" style="color:${st.color};border-color:${st.color}">${st.label}</span>
-      ${c.tags.map(g => `<span class="badge" style="color:var(--smoke);border-color:var(--line)">#${esc(g)}</span>`).join('')}</div>
+      ${c.tags.map(g => `<span class="badge" style="color:var(--smoke);border-color:var(--line)">#${esc(g)}</span>`).join('')}
+      ${parseDate(c.date) ? `<a class="badge" href="#/timeline" style="color:var(--lamp);border-color:var(--lamp);text-decoration:none">◷ ${esc(fmtRange(c))}</a>` : ''}</div>
     <h1 class="title">${c.icon ? `<img class="emblem" data-media="${esc(c.icon)}" alt="">` : ''}${esc(c.title)}</h1>
     ${c.aliases.length ? `<div class="aka">also: ${c.aliases.map(esc).join(', ')}</div>` : ''}
     ${c.status === 'v35' ? `<div class="review"><span>From the original Codex. Does it still fit 2.0?</span>
@@ -674,6 +723,10 @@ function renderEdit(c) {
       <label>Background<select name="bg"><option value="">(same as the card it’s inside)</option>${W.backgrounds.map(b => `<option value="${esc(b.id)}"${b.id === c.bg ? ' selected' : ''}>${esc(b.name)}</option>`).join('')}</select></label>
       <label>Image caption<input class="inp" name="imgCaption" value="${esc(c.imgCaption || '')}" placeholder="Shown under the card image"></label>
     </div>
+    <div class="two">
+      <label>On the timeline<input class="inp" name="date" value="${esc(c.date || '')}" placeholder="2049-03-14, 2049-03 or 2049"></label>
+      <label>Until (optional)<input class="inp" name="dateEnd" value="${esc(c.dateEnd || '')}" placeholder="for spans: end date"></label>
+    </div>
     <label>Details<span class="hint">Short facts shown as a table at the top.</span></label>
     <div id="frows">${c.fields.map(f => frow(f.k, f.v)).join('')}</div>
     <div><button type="button" class="btn small" data-act="add-field">+ Detail</button></div>
@@ -708,7 +761,7 @@ function saveEdit(c, f) {
   Object.assign(c, {
     title, type: el.type.value, status: el.status.value, aliases: list(el.aliases.value), tags: list(el.tags.value),
     parent: el.parent.value || null, autolink: el.autolink.checked, body: el.body.value.replace(/\s+$/, ''),
-    bg: el.bg.value || null, imgCaption: el.imgCaption.value.trim(),
+    bg: el.bg.value || null, imgCaption: el.imgCaption.value.trim(), date: el.date.value.trim(), dateEnd: el.dateEnd.value.trim(),
     fields: [...f.querySelectorAll('.frow')].map(r => ({ k: r.querySelector('[data-fk]').value.trim(), v: r.querySelector('[data-fv]').value.trim() })).filter(x => x.k || x.v),
   });
   touch(c); changed(); editing = null; toast('Saved'); render();
@@ -733,11 +786,11 @@ function autocomplete(ta) {
     ta.setSelectionRange(caret, caret); ta.focus(); ac.classList.add('hidden'); editing.dirty = true;
   };
 }
-function newCard(type, title) {
+function newCard(type, title, extra) {
   const t = TYPES[type] || TYPES.note;
   const fields = (W.templates && W.templates[type]) || t.fields;
   const c = { id: uid('c'), type, title: title || 'Untitled ' + t.label.toLowerCase(), aliases: [], tags: [], status: 'draft', parent: null, order: 0,
-    fields: fields.map(k => ({ k, v: '' })), body: '', autolink: true, created: Date.now(), updated: Date.now() };
+    fields: fields.map(k => ({ k, v: '' })), body: '', autolink: true, created: Date.now(), updated: Date.now(), ...(extra || {}) };
   W.cards.push(c); changed();
   editing = { id: c.id, dirty: false };
   openCard(c.id);
@@ -1990,16 +2043,187 @@ function close3D() {
   V3.wrap.remove(); V3 = null;
 }
 
-/* ---------- timeline ---------- */
+/* ---------- timeline + calendar ---------- */
+// Any card with a `date` ("2049", "2049-03" or "2049-03-14"; negative years are BCE) sits on the timeline,
+// with an optional `dateEnd` for spans. Eras are coloured ranges in `world.eras`.
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const ERA_COLORS = ['#5be0c8', '#a99bff', '#ffca7a', '#e0705b', '#6fd08c', '#e9a3c9', '#8fb4ff'];
+function parseDate(s) {
+  const m = String(s || '').trim().match(/^(-?\d{1,5})(?:-(\d{1,2}))?(?:-(\d{1,2}))?$/); if (!m) return null;
+  const y = +m[1], mo = m[2] ? Math.min(12, Math.max(1, +m[2])) : 0, d = m[3] ? Math.min(31, Math.max(1, +m[3])) : 0;
+  return { y, m: mo, d, t: y + (mo ? (mo - 1) / 12 : 0) + (d ? (d - 1) / 365 : 0) };
+}
+function fmtDate(p) {
+  if (!p) return '';
+  const y = p.y < 0 ? `${-p.y} BCE` : p.y;
+  return p.d ? `${MONTHS[p.m - 1].slice(0, 3)} ${p.d}, ${y}` : p.m ? `${MONTHS[p.m - 1]} ${y}` : `${y}`;
+}
+function fmtRange(c) { const a = parseDate(c.date), b = parseDate(c.dateEnd); return a ? fmtDate(a) + (b && b.t > a.t ? ' – ' + fmtDate(b) : '') : ''; }
+function dated() {
+  return W.cards.filter(c => c.status !== 'cut' && parseDate(c.date)).map(c => {
+    const a = parseDate(c.date), b = parseDate(c.dateEnd);
+    return { c, a, b: b && b.t > a.t ? b : null };
+  }).sort((x, y) => x.a.t - y.a.t);
+}
+const eraList = () => W.eras.map(e => ({ e, a: parseDate(e.start), b: parseDate(e.end) })).filter(x => x.a).sort((x, y) => x.a.t - y.a.t);
+const TL = { ppy: null };
+
 function renderTimeline() {
-  const evs = W.cards.filter(c => c.type === 'event' && passes(c, { fType: 'all', fStatus: ui.fStatus }))
+  const mode = ui.tlMode || 'line';
+  main.innerHTML = `<div class="tlwrap"><div class="tl-head">
+      <div class="seg"><button class="btn small${mode === 'line' ? ' on' : ''}" data-act="tl-mode" data-v="line">Timeline</button>
+        <button class="btn small${mode === 'cal' ? ' on' : ''}" data-act="tl-mode" data-v="cal">Calendar</button></div>
+      <span id="tlctl" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"></span>
+      <span style="margin-left:auto;display:flex;gap:6px"><button class="btn small" data-act="tl-eras">Eras</button><button class="btn small solid" data-act="new-event">+ Event</button></span>
+    </div><div id="tlbody"></div></div>`;
+  mode === 'line' ? drawLine() : drawCal();
+}
+function undatedHtml() {
+  const und = W.cards.filter(c => c.type === 'event' && c.status !== 'cut' && !parseDate(c.date))
     .sort((a, b) => (parseFloat(getField(a, 'Order')) || 0) - (parseFloat(getField(b, 'Order')) || 0) || a.title.localeCompare(b.title));
-  main.innerHTML = `<article><h1 class="title">Timeline</h1>
-    <p class="hint">Event cards in order. Set an event’s <b>Order</b> detail (a number) to place it, and <b>When</b> for the label.</p>
-    <div class="tools"><button class="btn" data-act="new-event">+ Event</button></div>
-    ${evs.length ? `<div class="tl">${evs.map(c => `<div class="ev"><div class="when">${esc(getField(c, 'When') || 'Undated')}</div>
-      <a class="wl" data-id="${esc(c.id)}" style="border:0">${esc(c.title)}</a><p>${esc(excerpt(c, 180))}</p></div>`).join('')}</div>` : '<p class="none">No events yet.</p>'}
-  </article>`;
+  return und.length ? `<div class="tl-undated"><h3 class="hint" style="letter-spacing:.14em;text-transform:uppercase;margin-bottom:6px">Events without a date</h3>
+    <div class="chips">${und.map(c => chip(c, getField(c, 'When') ? `<span class="lbl">${esc(getField(c, 'When'))}</span> ` : '')).join('')}</div>
+    <p class="hint" style="margin-top:6px">Give a card a date in Edit → On the timeline to place it.</p></div>` : '';
+}
+
+function drawLine(prevPpy) {   // prevPpy: keep the centre after a zoom; false: scroll to the start
+  const body = $('#tlbody'), items = dated(), eras = eraList();
+  $('#tlctl').innerHTML = `<button class="btn small" data-act="tl-zoom" data-v="out">−</button><button class="btn small" data-act="tl-zoom" data-v="in">+</button><button class="btn small" data-act="tl-zoom" data-v="fit">Fit</button>`;
+  if (!items.length && !eras.length) {
+    body.innerHTML = `<div class="centered" style="position:relative;min-height:50%"><div class="box"><h2>Nothing dated yet</h2>
+      <p>Open a card, tap Edit, and fill in <b>On the timeline</b> (e.g. 2049-03-14, 2049-03 or just 2049). Add eras to colour the big stretches of history.</p></div></div>${undatedHtml()}`;
+    return;
+  }
+  let t0 = Infinity, t1 = -Infinity;
+  items.forEach(x => { t0 = Math.min(t0, x.a.t); t1 = Math.max(t1, (x.b || x.a).t); });
+  eras.forEach(x => { t0 = Math.min(t0, x.a.t); t1 = Math.max(t1, (x.b || x.a).t); });
+  const pad = Math.max(0.5, (t1 - t0) * 0.06); t0 -= pad; t1 += pad;
+  const vw = body.clientWidth || 800;
+  const oldLeft = body.scrollLeft;
+  if (!TL.ppy) TL.ppy = Math.max(2, (vw - 250) / (t1 - t0));   // leave room for the last card (180px wide)
+  const ppy = TL.ppy, X = t => 30 + (t - t0) * ppy, width = Math.ceil(X(t1) + 220);
+  // eras: greedy rows
+  const eraRows = [], eraHtml = [], shade = [];
+  eras.forEach((x, k) => {
+    const x0 = X(x.a.t), x1 = Math.max(x0 + 40, X((x.b || x.a).t)), col = x.e.color || ERA_COLORS[k % ERA_COLORS.length];
+    let r = eraRows.findIndex(end => end < x0 - 4); if (r < 0) { r = eraRows.length; eraRows.push(0); }
+    eraRows[r] = x1;
+    eraHtml.push(`<div class="tlera" data-era="${esc(x.e.id)}" style="left:${x0}px;width:${x1 - x0}px;top:${10 + r * 30}px;background:${col}" title="${esc(x.e.name)}">${esc(x.e.name)}</div>`);
+    shade.push(`<div class="tlshade" style="left:${x0}px;width:${x1 - x0}px;background:${col}"></div>`);
+  });
+  const axisY = 10 + Math.max(1, eraRows.length) * 30 + 34;
+  // ticks: smallest step at least 70px apart
+  const steps = [1 / 12, 1, 2, 5, 10, 25, 50, 100, 250, 500, 1000, 5000], step = steps.find(s => s * ppy >= 70) || 5000;
+  const ticks = [];
+  for (let t = Math.ceil(t0 / step) * step; t <= t1; t += step) {
+    const y = Math.floor(t + 1e-6), mo = Math.round((t - y) * 12);
+    const label = step < 1 ? (mo === 0 ? `<b>${y}</b>` : MONTHS[mo].slice(0, 3)) : (y < 0 ? `${-y} BCE` : y);
+    ticks.push(`<div class="tltick" style="left:${X(t)}px;top:${axisY - 26}px">${label}</div><div class="tlmark" style="left:${X(t)}px;top:${axisY - 6}px"></div>`);
+  }
+  // events: greedy lanes, card width 180
+  const lanes = [], evHtml = [];
+  items.forEach(x => {
+    const x0 = X(x.a.t), cx = Math.max(4, x0 - 12);
+    let r = lanes.findIndex(end => end < cx - 8); if (r < 0) { r = lanes.length; lanes.push(0); }
+    lanes[r] = cx + 184;
+    const top = axisY + 26 + r * 76, t = typeOf(x.c);
+    if (x.b) evHtml.push(`<div class="tlrange" style="left:${x0}px;width:${Math.max(4, X(x.b.t) - x0)}px;top:${axisY - 2}px;background:${t.color}"></div>`);
+    evHtml.push(`<div class="tlstem" style="left:${x0}px;top:${axisY}px;height:${top - axisY}px"></div>
+      <div class="tldot" style="left:${x0}px;top:${axisY + 1}px;background:${t.color}"></div>
+      <a class="tlev" data-id="${esc(x.c.id)}" style="left:${cx}px;top:${top}px"><span class="strip" style="background:${t.color}"></span>
+        ${x.c.img ? `<img data-media="${esc(x.c.img)}" alt="">` : `<span class="noimg" style="color:${t.color}">${t.icon}</span>`}
+        <span class="tt"><b>${esc(x.c.title)}</b><small>${esc(fmtRange(x.c))}</small></span></a>`);
+  });
+  const height = axisY + 26 + Math.max(1, lanes.length) * 76 + 20;
+  body.innerHTML = `<div class="tlin" style="width:${width}px;height:${height}px">${shade.join('')}${eraHtml.join('')}
+    <div class="tlaxis" style="top:${axisY}px;width:${width}px"></div>${ticks.join('')}${evHtml.join('')}</div>${undatedHtml()}`;
+  hydrateMedia(body);
+  if (prevPpy) body.scrollLeft = Math.max(0, X(t0 + (oldLeft + vw / 2 - 30) / prevPpy) - vw / 2);
+  else if (prevPpy === false) body.scrollLeft = 0;
+  body.onwheel = e => { if (!e.ctrlKey) return; e.preventDefault(); zoomLine(Math.exp(-e.deltaY * 0.004)); };
+}
+
+function drawCal() {
+  const body = $('#tlbody'), items = dated();
+  if (ui.calY == null) {
+    const last = [...items].reverse().find(x => x.a.m), now = new Date();
+    ui.calY = last ? last.a.y : now.getFullYear(); ui.calM = last ? last.a.m : now.getMonth() + 1;
+  }
+  const y = ui.calY, m = ui.calM, yearView = ui.calView === 'year';
+  $('#tlctl').innerHTML = `<button class="btn small" data-act="cal-nav" data-v="-1">‹</button>
+    <span class="pill hint" style="font-size:15px;color:var(--paper)">${yearView ? (y < 0 ? -y + ' BCE' : y) : MONTHS[m - 1] + ' ' + (y < 0 ? -y + ' BCE' : y)}</span>
+    <button class="btn small" data-act="cal-nav" data-v="1">›</button>
+    <button class="btn small${yearView ? ' on' : ''}" data-act="cal-view" data-v="year">Year</button><button class="btn small${yearView ? '' : ' on'}" data-act="cal-view" data-v="month">Month</button>
+    <input class="inp" id="calYear" type="number" value="${y}" style="width:90px;padding:4px 6px" title="Jump to year">`;
+  const utc = (yy, mm, dd) => { const d = new Date(Date.UTC(2000, mm - 1, dd)); d.setUTCFullYear(yy); return d; };
+  const daysIn = (yy, mm) => { const d = utc(yy, mm + 1, 0); return d.getUTCDate(); };
+  const onDay = (yy, mm, dd) => items.filter(x => x.a.y === yy && x.a.m === mm && x.a.d === dd);
+  const spans = (yy, mm, dd) => { const t = yy + (mm - 1) / 12 + (dd - 1) / 365; return items.filter(x => x.b && x.a.t < t && x.b.t >= t); };
+  if (yearView) {
+    body.innerHTML = `<div class="cal"><div class="calyear">${MONTHS.map((name, k) => {
+      const mm = k + 1, first = utc(y, mm, 1).getUTCDay(), n = daysIn(y, mm);
+      const has = new Set(items.filter(x => x.a.y === y && x.a.m === mm && x.a.d).map(x => x.a.d));
+      const monthOnly = items.filter(x => x.a.y === y && x.a.m === mm && !x.a.d).length;
+      return `<div class="calmini" data-act="cal-month" data-v="${mm}"><h4>${name}${monthOnly ? ` · ${monthOnly}` : ''}</h4><div class="g">${'<i></i>'.repeat(first)}${Array.from({ length: n }, (_, d) => `<span class="${has.has(d + 1) ? 'has' : ''}">${d + 1}</span>`).join('')}</div></div>`;
+    }).join('')}</div>${undatedHtml()}</div>`;
+    return;
+  }
+  const first = utc(y, m, 1).getUTCDay(), n = daysIn(y, m);
+  const monthOnly = items.filter(x => x.a.y === y && x.a.m === m && !x.a.d);
+  const cells = [];
+  for (let k = 0; k < first; k++) cells.push('<div class="calday blank"></div>');
+  for (let d = 1; d <= n; d++) {
+    const evs = onDay(y, m, d), sp = spans(y, m, d);
+    const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    cells.push(`<div class="calday" data-act="cal-new" data-v="${iso}" title="Add an event on ${esc(fmtDate(parseDate(iso)))}"><span class="n">${d}</span>
+      ${sp.map(x => `<div class="span" style="background:${typeOf(x.c).color}" title="${esc(x.c.title)}"></div>`).join('')}
+      ${evs.slice(0, 3).map(x => `<a class="ce" data-id="${esc(x.c.id)}">${x.c.img ? `<img data-media="${esc(x.c.img)}" alt="">` : `<i class="pip" style="background:${typeOf(x.c).color}"></i>`}<span>${esc(x.c.title)}</span></a>`).join('')}
+      ${evs.length > 3 ? `<small class="hint">+${evs.length - 3} more</small>` : ''}</div>`);
+  }
+  body.innerHTML = `<div class="cal">${monthOnly.length ? `<div class="chips" style="margin-bottom:10px"><span class="hint" style="align-self:center">This month:</span>${monthOnly.map(x => chip(x.c)).join('')}</div>` : ''}
+    <div class="calgrid">${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => `<div class="calwd">${d}</div>`).join('')}${cells.join('')}</div>${undatedHtml()}</div>`;
+  hydrateMedia(body);
+}
+
+function openEras() {
+  const box = modal(`<h2>Eras</h2><p>Long stretches of history, drawn as coloured bands above the timeline. Years can be negative for BCE.</p>
+    <div id="eraRows"></div><div class="row"><button class="btn" data-act="era-add">+ Era</button><button class="btn solid" data-close>Done</button></div>`);
+  const draw = () => {
+    box.querySelector('#eraRows').innerHTML = W.eras.map((e, k) => `<div class="frow" data-erarow="${esc(e.id)}" style="flex-wrap:wrap">
+      <input class="inp" data-ek="name" value="${esc(e.name)}" placeholder="Era name" style="flex:2;min-width:140px;width:auto">
+      <input class="inp" data-ek="start" value="${esc(e.start)}" placeholder="Start (e.g. 2026)" style="width:110px;flex:none">
+      <input class="inp" data-ek="end" value="${esc(e.end || '')}" placeholder="End" style="width:110px;flex:none">
+      <input type="color" data-ek="color" value="${esc(e.color || ERA_COLORS[k % ERA_COLORS.length])}" style="width:40px;height:34px;border:0;background:none">
+      <button type="button" class="btn small danger" data-eradel="${esc(e.id)}">×</button></div>`).join('') || '<p class="none">No eras yet.</p>';
+  };
+  draw();
+  box.addEventListener('input', e => {
+    const row = e.target.closest('[data-erarow]'), k = e.target.dataset.ek; if (!row || !k) return;
+    const era = W.eras.find(x => x.id === row.dataset.erarow); era[k] = e.target.value.trim(); era.updated = Date.now();
+    clearTimeout(box._t); box._t = setTimeout(() => changed(), 500);
+  });
+  box.addEventListener('click', e => {
+    if (e.target.dataset.act === 'era-add') { W.eras.push({ id: uid('e'), name: 'New era', start: String(ui.calY || new Date().getFullYear()), end: '', color: ERA_COLORS[W.eras.length % ERA_COLORS.length], updated: Date.now() }); changed(); draw(); }
+    const del = e.target.dataset.eradel;
+    if (del) { W.deleted[del] = Date.now(); W.eras = W.eras.filter(x => x.id !== del); changed(); draw(); }
+  });
+  const obs = new MutationObserver(() => { if (!document.body.contains(box)) { obs.disconnect(); if (view() === 'timeline') render(); } });
+  obs.observe(document.body, { childList: true });
+}
+function zoomLine(k) { const prev = TL.ppy; TL.ppy = Math.max(1, Math.min(50000, prev * k)); drawLine(prev); }
+function timelineAct(a, v) {
+  switch (a) {
+    case 'tl-mode': ui.tlMode = v; saveJSON(UI_KEY, ui); return renderTimeline();
+    case 'tl-zoom': if (v === 'fit') { TL.ppy = null; return drawLine(false); } return zoomLine(v === 'in' ? 1.7 : 1 / 1.7);
+    case 'tl-eras': return openEras();
+    case 'cal-view': ui.calView = v; saveJSON(UI_KEY, ui); return drawCal();
+    case 'cal-month': ui.calView = 'month'; ui.calM = +v; saveJSON(UI_KEY, ui); return drawCal();
+    case 'cal-nav':
+      if (ui.calView === 'year') ui.calY += +v;
+      else { ui.calM += +v; if (ui.calM < 1) { ui.calM = 12; ui.calY--; } if (ui.calM > 12) { ui.calM = 1; ui.calY++; } }
+      saveJSON(UI_KEY, ui); return drawCal();
+    case 'cal-new': return newCard('event', null, { date: v });
+  }
 }
 
 /* ---------- search ---------- */
@@ -2090,6 +2314,7 @@ function merge(a, b) {
   out.canvas = Object.assign({}, b.canvas, a.canvas);
   out.templates = Object.assign({}, b.templates, a.templates);
   out.backgrounds = pick(a.backgrounds || [], b.backgrounds || []);
+  out.eras = pick(a.eras || [], b.eras || []);
   out.theme = (a.updated || 0) >= (b.updated || 0) ? Object.assign({}, b.theme, a.theme) : Object.assign({}, a.theme, b.theme);
   out.updated = Math.max(a.updated || 0, b.updated || 0);
   return out;
@@ -2292,6 +2517,7 @@ document.addEventListener('click', async e => {
   if (dr) { W.deleted[dr.dataset.delrel] = Date.now(); W.relations = W.relations.filter(r => r.id !== dr.dataset.delrel); changed(); return render(); }
   const act = t.closest('[data-act]'); if (!act || act.tagName === 'SELECT') return;
   if (act.dataset.act.startsWith('m-')) return mapAct(act.dataset.act.slice(2), act);
+  if (/^(tl|cal)-/.test(act.dataset.act)) return timelineAct(act.dataset.act, act.dataset.v);
   const c = W && route().id ? card(route().id) : null;
   switch (act.dataset.act) {
     case 'settings': return openSettings();
@@ -2333,6 +2559,7 @@ function addRel(a, b, label) {
   changed(); toast('Connected'); render();
 }
 document.addEventListener('change', e => {
+  if (e.target.id === 'calYear') { ui.calY = Math.round(+e.target.value) || ui.calY; saveJSON(UI_KEY, ui); return drawCal(); }
   if (e.target.id === 'maxElev' && M) { M.map.maxElev = Math.max(1, +e.target.value || 1000); touchMap(); drawVec(); return; }
   if (e.target.matches('select[data-act="set-status"]')) { const c = card(route().id); setStatus(c, e.target.value); render(); }
 });
