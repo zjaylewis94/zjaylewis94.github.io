@@ -189,7 +189,10 @@ svg.graph text.el{font-family:var(--ui);font-size:10px;fill:var(--brass);paint-o
 .pin svg{width:26px;height:30px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.7))}
 .pin .pl{position:absolute;left:14px;top:-26px;white-space:nowrap;font-family:var(--ui);font-weight:600;font-size:13px;
   background:rgba(14,21,18,.85);padding:1px 6px;border-radius:5px;transform-origin:-14px 26px;pointer-events:none}
-#mpaint,#mvec{position:absolute;left:0;top:0}
+#mpaint,#mshade,#mvec{position:absolute;left:0;top:0}
+#mshade{pointer-events:none}
+.v3d{position:absolute;inset:0;z-index:7;background:var(--ink)}
+#c3d{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
 .mapstage img{position:absolute;left:0;top:0}
 #mvec{overflow:visible}
 #mvec text{font-family:var(--ui);font-weight:700;paint-order:stroke;stroke:#0e1512;stroke-linejoin:round}
@@ -535,6 +538,7 @@ window.addEventListener('hashchange', () => {
 function render() {
   lastHash = location.hash;
   const r = route();
+  close3D();
   if (mapEditing() && (r.v !== 'map' || (r.id && r.id !== M.map.id))) exitEdit(true);
   document.querySelectorAll('#views a').forEach(a => a.classList.toggle('on', a.dataset.v === view()));
   renderList();
@@ -967,13 +971,13 @@ const PATH_STYLES = {
   trail: { label: 'Trail', color: '#e9e0c9', w: 4, dash: '3 5' }, border: { label: 'Border', color: '#e0705b', w: 4, dash: '10 7' },
 };
 const BRUSH = { S: 12, M: 30, L: 64, XL: 130 };
-const MAP_TOOLS = [['select', 'Select'], ['paint', 'Paint'], ['zone', 'Zone'], ['path', 'Path'], ['label', 'Label'], ['pin', 'Pin']];
+const MAP_TOOLS = [['select', 'Select'], ['paint', 'Paint'], ['terrain', 'Terrain'], ['zone', 'Zone'], ['path', 'Path'], ['label', 'Label'], ['pin', 'Pin']];
 let M = null, pendingTool = null;
 
 const mapScale = m => Math.max(m.w, m.h) / 1600;
 const mapEditing = () => !!(M && M.edit);
 function renderMap(mapId) {
-  if (M && M.paintDirty) commitPaint();
+  if (M) { close3D(); commitLayers(); }
   const m = W.maps.find(x => x.id === (mapId || ui.mapId)) || W.maps[0];
   if (!m) {
     M = null;
@@ -983,12 +987,14 @@ function renderMap(mapId) {
   }
   if (ui.mapId !== m.id) { ui.mapId = m.id; saveJSON(UI_KEY, ui); }
   const same = M && M.map.id === m.id;
-  M = { map: m, view: same ? M.view : null, edit: same ? M.edit : null, undo: same ? M.undo : [], sel: null, draft: null, hover: null, paintDirty: false };
+  M = { map: m, view: same ? M.view : null, edit: same ? M.edit : null, undo: same ? M.undo : [], sel: null, draft: null, hover: null, paintDirty: false,
+    H: same ? M.H : null, hw: same ? M.hw : 0, hh: same ? M.hh : 0, heightDirty: false };
   if (pendingTool) { M.edit = newEditState(pendingTool); pendingTool = null; }
   const pw = Math.round(m.w * PAINT_SCALE), ph = Math.round(m.h * PAINT_SCALE);
   main.innerHTML = `<div class="stage" id="mstage"><div class="mapstage" id="mview" style="width:${m.w}px;height:${m.h}px;background:${m.bg || 'transparent'}">
       ${m.img ? `<img id="mimg" alt="" style="width:${m.w}px;height:${m.h}px">` : ''}
       <canvas id="mpaint" width="${pw}" height="${ph}" style="width:${m.w}px;height:${m.h}px"></canvas>
+      <canvas id="mshade" style="width:${m.w}px;height:${m.h}px"></canvas>
       <svg id="mvec" width="${m.w}" height="${m.h}" viewBox="0 0 ${m.w} ${m.h}"></svg>
       <div id="mpins"></div></div>
     <div class="toolbar" id="mtools"></div>
@@ -998,18 +1004,19 @@ function renderMap(mapId) {
     if (!d || !$('#mpaint')) return;
     const img = new Image(); img.onload = () => { const c = $('#mpaint'); if (c) c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); }; img.src = d;
   });
+  if (M.H) drawShade(); else loadHeight();
   drawTools(); drawVec(); drawPins();
   if (!M.view) fitMap(); else applyMap();
   bindMap();
 }
-function newEditState(tool) { return { tool: tool || 'select', paint: 'land', brush: 'M', pathStyle: 'road', zoneColor: ZONE_COLORS[0] }; }
+function newEditState(tool) { return { tool: tool || 'select', paint: 'land', brush: 'M', sculpt: 'raise', pathStyle: 'road', zoneColor: ZONE_COLORS[0] }; }
 
 /* drawing */
 function drawTools() {
   const m = M.map, e = M.edit, tb = $('#mtools');
   if (!e) {
     tb.innerHTML = `<div class="tools-row"><select id="mapSel">${W.maps.map(x => `<option value="${esc(x.id)}"${x.id === m.id ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
-      <button class="btn small solid" data-act="m-edit">Edit map</button><button class="btn small" data-act="m-fit">Fit</button>
+      <button class="btn small solid" data-act="m-edit">Edit map</button><button class="btn small" data-act="m-3d">3D</button><button class="btn small" data-act="m-fit">Fit</button>
       <button class="btn small" data-act="m-new">New map</button><button class="btn small" data-act="m-menu">⋯</button></div>`;
     $('#mapSel').onchange = ev => go('#/map/' + encodeURIComponent(ev.target.value));
     $('#mstage').className = 'stage';
@@ -1020,6 +1027,11 @@ function drawTools() {
     opt.push(Object.entries(PAINTS).map(([k, c]) => `<button class="sw${e.paint === k ? ' on' : ''}" data-act="m-paint" data-v="${k}" title="${k}" style="background:${c || 'repeating-linear-gradient(45deg,#333 0 4px,#777 4px 8px)'}"></button>`).join(''));
     opt.push(Object.keys(BRUSH).map(k => `<button class="btn small${e.brush === k ? ' on' : ''}" data-act="m-brush" data-v="${k}">${k}</button>`).join(''));
     opt.push('<span class="hint pill">Drag to paint · two fingers to move</span>');
+  } else if (e.tool === 'terrain') {
+    opt.push(Object.entries(SCULPT).map(([k, l]) => `<button class="btn small${e.sculpt === k ? ' on' : ''}" data-act="m-sculpt" data-v="${k}">${l}</button>`).join(''));
+    opt.push(Object.keys(BRUSH).map(k => `<button class="btn small${e.brush === k ? ' on' : ''}" data-act="m-brush" data-v="${k}">${k}</button>`).join(''));
+    opt.push('<button class="btn small" data-act="m-exporth">Export height map</button>');
+    opt.push('<span class="hint pill">Drag to shape the land · dig below sea level for water · 3D to see it</span>');
   } else if (e.tool === 'zone') {
     opt.push(ZONE_COLORS.map(c => `<button class="sw${e.zoneColor === c ? ' on' : ''}" data-act="m-zcolor" data-v="${c}" style="background:${c}"></button>`).join(''));
     opt.push(M.draft ? `<button class="btn small solid" data-act="m-finish">Finish zone</button><button class="btn small" data-act="m-cancel">Cancel</button>` : '');
@@ -1032,7 +1044,7 @@ function drawTools() {
     opt.push(`<span class="hint pill">${{ select: 'Tap a shape to edit it · drag corners, labels and pins', label: 'Tap where the label goes', pin: 'Tap where the pin goes' }[e.tool]}</span>`);
   }
   tb.innerHTML = `<div class="tools-row"><button class="btn small solid" data-act="m-done">Done</button>
-      <button class="btn small" data-act="m-undo"${M.undo.length ? '' : ' disabled'}>Undo</button>
+      <button class="btn small" data-act="m-undo"${M.undo.length ? '' : ' disabled'}>Undo</button><button class="btn small" data-act="m-3d">3D</button>
       ${MAP_TOOLS.map(([k, l]) => `<button class="btn small${e.tool === k ? ' on' : ''}" data-act="m-tool" data-v="${k}">${l}</button>`).join('')}</div>
     <div class="tools-row">${opt.join('')}</div>`;
   $('#mstage').className = 'stage editing tool-' + e.tool;
@@ -1113,7 +1125,7 @@ function redraw() { drawTools(); drawVec(); drawPins(); }
 function vecState() { const m = M.map; return JSON.stringify({ points: m.points, zones: m.zones, paths: m.paths, labels: m.labels, pins: m.pins }); }
 function pushUndo(entry) {
   M.undo.push(entry);
-  const imgs = M.undo.filter(u => u.img);
+  const imgs = M.undo.filter(u => u.img || u.hgt);
   if (imgs.length > 8) M.undo.splice(M.undo.indexOf(imgs[0]), 1);   // paint snapshots are big; keep the last 8
   if (M.undo.length > 50) M.undo.shift();
 }
@@ -1122,6 +1134,7 @@ function undo() {
   const u = M.undo.pop(); if (!u) return;
   if (u.v) { Object.assign(M.map, JSON.parse(u.v)); touchMap(); }
   else if (u.img) { $('#mpaint').getContext('2d').putImageData(u.img, 0, 0); M.paintDirty = true; }
+  else if (u.hgt) { M.H.set(u.hgt); M.heightDirty = true; drawShade(); }
   M.sel = null; M.draft = null; hideInfo(); redraw();
 }
 function touchMap() { M.map.updated = Date.now(); changed(); }
@@ -1300,11 +1313,12 @@ function deleteSel() {
 function enterEdit(tool) { M.edit = newEditState(tool); M.sel = null; hideInfo(); redraw(); fitMap(); }
 function exitEdit(quiet) {
   if (!M) return;
-  commitPaint(); M.edit = null; M.draft = null; M.sel = null; M.hover = null;
+  commitLayers(); M.edit = null; M.draft = null; M.sel = null; M.hover = null;
   if (!quiet) { hideInfo(); redraw(); }
 }
 function setTool(t) {
   if (M.edit.tool === 'paint' && t !== 'paint') commitPaint();
+  if (M.edit.tool === 'terrain' && t !== 'terrain') commitHeight();
   if (M.draft && t !== M.draft.kind) M.draft = null;
   M.edit.tool = t; M.sel = null; hideInfo(); redraw();
 }
@@ -1319,6 +1333,11 @@ function mapAct(a, el) {
     case 'tool': return setTool(v);
     case 'paint': M.edit.paint = v; return drawTools();
     case 'brush': M.edit.brush = v; return drawTools();
+    case 'sculpt': M.edit.sculpt = v; return drawTools();
+    case 'exporth': return exportHeight();
+    case '3d': return open3D();
+    case 'close3d': return close3D();
+    case 'water3d': ui.water3d = ui.water3d === false; saveJSON(UI_KEY, ui); el.classList.toggle('on', ui.water3d); return V3 && V3.draw();
     case 'finish': return finishDraft();
     case 'cancel': M.draft = null; M.hover = null; return redraw();
     case 'del': return deleteSel();
@@ -1340,7 +1359,7 @@ function mapAct(a, el) {
       if (choice === null) return;
       if (choice.trim() === 'DELETE') {
         W.deleted[m.id] = Date.now(); W.maps = W.maps.filter(x => x.id !== m.id);
-        if (m.paint) meta.mediaGone = [...(meta.mediaGone || []), m.paint];
+        meta.mediaGone = [...(meta.mediaGone || []), ...[m.paint, m.height].filter(Boolean)];
         ui.mapId = null; M = null; changed(); return go('#/map');
       }
       if (choice.trim()) { m.name = choice.trim(); touchMap(); drawTools(); }
@@ -1360,6 +1379,7 @@ function bindMap() {
     st.setPointerCapture(e.pointerId); pts.set(e.pointerId, local(e));
     if (pts.size === 2) {
       if (g && g.kind === 'paint') cancelStroke(g);
+      if (g && g.kind === 'terrain') cancelSculpt(g);
       const [a, b] = [...pts.values()];
       g = { kind: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y), v0: { ...M.view }, m: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
       return;
@@ -1370,6 +1390,7 @@ function bindMap() {
       pin: attr(t, '[data-pinbtn]', 'data-pinbtn'), zone: attr(t, '[data-zone]', 'data-zone'), path: attr(t, '[data-path]', 'data-path') };
     g = { kind: 'tap', p0: p, q0: q, v0: { ...M.view }, hit, moved: false };
     if (tool === 'paint') { g.kind = 'paint'; startStroke(g, q); }
+    else if (tool === 'terrain') { g.kind = 'terrain'; startSculpt(g, q); }
     else if (tool === 'select' && (hit.pt || hit.pp !== null || hit.label || hit.pin)) { g.kind = 'drag'; g.before = vecState(); }
   });
   st.addEventListener('pointermove', e => {
@@ -1386,6 +1407,7 @@ function bindMap() {
       M.view = { k, x: g.m.x - (g.m.x - g.v0.x) * k / g.v0.k, y: g.m.y - (g.m.y - g.v0.y) * k / g.v0.k }; applyMap(); return;
     }
     if (g.kind === 'paint') return strokeTo(g, q);
+    if (g.kind === 'terrain') return sculptTo(g, q);
     if (Math.hypot(p.x - g.p0.x, p.y - g.p0.y) > 5) g.moved = true;
     if (!g.moved) return;
     if (g.kind === 'drag') {
@@ -1404,6 +1426,7 @@ function bindMap() {
     if (d.kind === 'pinch') { if (!pts.size) g = null; return; }
     g = null;
     if (d.kind === 'paint') return endStroke(d);
+    if (d.kind === 'terrain') return endSculpt(d);
     if (d.kind === 'drag') {
       if (d.moved) { pushUndo({ v: d.before }); touchMap(); drawTools(); return; }
       const h = d.hit;
@@ -1474,6 +1497,334 @@ function newMap() {
 function normalizeMap(m) {
   m.pins = m.pins || []; m.points = m.points || {}; m.zones = m.zones || []; m.paths = m.paths || []; m.labels = m.labels || [];
   return m;
+}
+
+/* ---------- terrain: height map, hill shading, 3D view, export ---------- */
+// Heights live at 1/4 of map resolution as floats from H_MIN to H_MAX; 0 is sea level, so digging below 0 makes water.
+// Stored as gzipped little-endian Uint16 (media id "mh…", synced as data/media/<id>.bin).
+const H_SCALE = 4, H_MIN = -0.3, H_MAX = 1;
+const SCULPT = { raise: 'Raise', lower: 'Lower', smooth: 'Smooth', flatten: 'Flatten' };
+const hDims = m => ({ hw: m.hw || Math.max(2, Math.round(m.w / H_SCALE)), hh: m.hh || Math.max(2, Math.round(m.h / H_SCALE)) });
+function ensureH() {
+  if (!M.H) { const d = hDims(M.map); M.hw = d.hw; M.hh = d.hh; M.H = new Float32Array(d.hw * d.hh); }
+  return M.H;
+}
+async function streamBytes(bytes, stream) { return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer()); }
+async function encodeHeight(H) {
+  const u = new Uint8Array(H.length * 2);
+  for (let i = 0; i < H.length; i++) { const v = Math.round((H[i] - H_MIN) / (H_MAX - H_MIN) * 65535); u[i * 2] = v & 255; u[i * 2 + 1] = v >> 8; }
+  const z = typeof CompressionStream === 'function' ? await streamBytes(u, new CompressionStream('gzip')) : u;
+  let bin = ''; for (let i = 0; i < z.length; i += 0x8000) bin += String.fromCharCode.apply(null, z.subarray(i, i + 0x8000));
+  return 'data:application/octet-stream;base64,' + btoa(bin);
+}
+async function decodeHeight(dataURL, n) {
+  const bin = atob(dataURL.split(',')[1]); let u = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  if (u[0] === 0x1f && u[1] === 0x8b) u = await streamBytes(u, new DecompressionStream('gzip'));
+  const H = new Float32Array(n);
+  for (let i = 0; i < n && i * 2 + 1 < u.length; i++) H[i] = H_MIN + (u[i * 2] | (u[i * 2 + 1] << 8)) / 65535 * (H_MAX - H_MIN);
+  return H;
+}
+function loadHeight() {
+  const m = M.map; if (!m.height) return;
+  const mine = M;
+  getMedia(m.height).then(async d => {
+    if (!d || M !== mine) return;
+    const { hw, hh } = hDims(m);
+    try { M.H = await decodeHeight(d, hw * hh); M.hw = hw; M.hh = hh; drawShade(); } catch (e) { toast('Couldn’t read this map’s terrain on this browser.', 4000); }
+  });
+}
+function commitHeight() {
+  if (!M || !M.heightDirty || !M.H) return;
+  M.heightDirty = false;
+  const m = M.map, copy = M.H.slice(), hw = M.hw, hh = M.hh;
+  encodeHeight(copy).then(data => {
+    const old = m.height, id = uid('mh');
+    media[id] = data; idbPut('media', id, data);
+    m.height = id; m.hw = hw; m.hh = hh;
+    if (old) { meta.mediaGone = [...(meta.mediaGone || []), old]; delete media[old]; idbDel('media', old).catch(() => {}); }
+    m.updated = Date.now(); changed();
+  });
+}
+function commitLayers() { commitPaint(); commitHeight(); }
+
+// Hill shading: light from the north-west; land below sea level is tinted as water.
+let shadeQueued = false;
+function drawShade() {
+  if (shadeQueued) return; shadeQueued = true;
+  requestAnimationFrame(() => {
+    shadeQueued = false;
+    const c = $('#mshade'); if (!c || !M || !M.H) return;
+    const { H, hw, hh } = M; c.width = hw; c.height = hh;
+    const ctx = c.getContext('2d'), img = ctx.createImageData(hw, hh), px = img.data, zf = 35;
+    const lx = -0.6, ly = -0.6, lz = 0.53, flat = lz;
+    for (let y = 0; y < hh; y++) for (let x = 0; x < hw; x++) {
+      const i = y * hw + x, h = H[i];
+      const dx = (H[y * hw + Math.min(hw - 1, x + 1)] - H[y * hw + Math.max(0, x - 1)]) * zf;
+      const dy = (H[Math.min(hh - 1, y + 1) * hw + x] - H[Math.max(0, y - 1) * hw + x]) * zf;
+      const len = Math.hypot(dx, dy, 1), s = (-dx * lx - dy * ly + lz) / len - flat, o = i * 4;
+      if (h < -0.004) { px[o] = 31; px[o + 1] = 90; px[o + 2] = 120; px[o + 3] = Math.min(220, 90 + -h * 500); continue; }
+      if (s < 0) { px[o + 3] = Math.min(150, -s * 240); }
+      else { px[o] = px[o + 1] = px[o + 2] = 255; px[o + 3] = Math.min(110, s * 200); }
+    }
+    ctx.putImageData(img, 0, 0);
+  });
+}
+
+/* sculpting */
+function startSculpt(g, q) {
+  const H = ensureH();
+  g.before = H.slice();
+  g.target = sampleH(q.x / H_SCALE, q.y / H_SCALE);
+  g.last = q; dab(g, q);
+}
+function sculptTo(g, q) {
+  const r = BRUSH[M.edit.brush] * 2 * mapScale(M.map) / 2, step = Math.max(2, r / 4);
+  const d = Math.hypot(q.x - g.last.x, q.y - g.last.y);
+  if (d < step) return;
+  const n = Math.ceil(d / step);
+  for (let i = 1; i <= n; i++) dab(g, { x: g.last.x + (q.x - g.last.x) * i / n, y: g.last.y + (q.y - g.last.y) * i / n });
+  g.last = q;
+}
+function sampleH(x, y) {
+  const { H, hw, hh } = M;
+  const xi = Math.max(0, Math.min(hw - 1, Math.round(x))), yi = Math.max(0, Math.min(hh - 1, Math.round(y)));
+  return H[yi * hw + xi];
+}
+function dab(g, q) {
+  const { H, hw, hh } = M, mode = M.edit.sculpt;
+  const r = BRUSH[M.edit.brush] * 2 * mapScale(M.map) / 2 / H_SCALE, cx = q.x / H_SCALE, cy = q.y / H_SCALE;
+  const x0 = Math.max(0, Math.floor(cx - r)), x1 = Math.min(hw - 1, Math.ceil(cx + r));
+  const y0 = Math.max(0, Math.floor(cy - r)), y1 = Math.min(hh - 1, Math.ceil(cy + r));
+  const src = mode === 'smooth' ? H.slice() : H;
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const d = Math.hypot(x - cx, y - cy) / r; if (d >= 1) continue;
+    const f = (1 - d * d) * (1 - d * d), i = y * hw + x;
+    let h = H[i];
+    if (mode === 'raise') h += 0.02 * f;
+    else if (mode === 'lower') h -= 0.02 * f;
+    else if (mode === 'flatten') h += (g.target - h) * 0.35 * f;
+    else {
+      let s = 0, n = 0;
+      for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) { const yy = y + j, xx = x + k; if (yy >= 0 && yy < hh && xx >= 0 && xx < hw) { s += src[yy * hw + xx]; n++; } }
+      h += (s / n - h) * 0.6 * f;
+    }
+    H[i] = Math.max(H_MIN, Math.min(H_MAX, h));
+  }
+  drawShade();
+}
+function endSculpt(g) { pushUndo({ hgt: g.before }); M.heightDirty = true; drawTools(); }
+function cancelSculpt(g) { M.H.set(g.before); drawShade(); }
+
+/* export for game engines: 16-bit greyscale PNG (Unreal, Godot, Blender) or 1025×1025 RAW (Unity) */
+function resampleH(tw, th) {
+  const { H, hw, hh } = M, out = new Uint16Array(tw * th);
+  for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) {
+    const fx = x / (tw - 1) * (hw - 1), fy = y / (th - 1) * (hh - 1), x0 = Math.floor(fx), y0 = Math.floor(fy);
+    const x1 = Math.min(hw - 1, x0 + 1), y1 = Math.min(hh - 1, y0 + 1), ax = fx - x0, ay = fy - y0;
+    const h = (H[y0 * hw + x0] * (1 - ax) + H[y0 * hw + x1] * ax) * (1 - ay) + (H[y1 * hw + x0] * (1 - ax) + H[y1 * hw + x1] * ax) * ay;
+    out[y * tw + x] = Math.round((h - H_MIN) / (H_MAX - H_MIN) * 65535);
+  }
+  return out;
+}
+let CRC = null;
+function crc32(bytes) {
+  if (!CRC) { CRC = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; CRC[n] = c >>> 0; } }
+  let c = 0xffffffff; for (let i = 0; i < bytes.length; i++) c = CRC[(c ^ bytes[i]) & 255] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+async function png16(w, h, px) {
+  const raw = new Uint8Array((w * 2 + 1) * h);
+  for (let y = 0, o = 0; y < h; y++) { raw[o++] = 0; for (let x = 0; x < w; x++) { const v = px[y * w + x]; raw[o++] = v >> 8; raw[o++] = v & 255; } }
+  const chunk = (type, data) => {
+    const b = new Uint8Array(12 + data.length), dv = new DataView(b.buffer);
+    dv.setUint32(0, data.length); for (let i = 0; i < 4; i++) b[4 + i] = type.charCodeAt(i);
+    b.set(data, 8); dv.setUint32(8 + data.length, crc32(b.subarray(4, 8 + data.length))); return b;
+  };
+  const ihdr = new Uint8Array(13), dv = new DataView(ihdr.buffer);
+  dv.setUint32(0, w); dv.setUint32(4, h); ihdr[8] = 16; ihdr[9] = 0;
+  const idat = await streamBytes(raw, new CompressionStream('deflate'));
+  return new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', idat), chunk('IEND', new Uint8Array(0))], { type: 'image/png' });
+}
+function download(blob, name) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+function exportHeight() {
+  if (typeof CompressionStream !== 'function') return toast('This browser can’t export height maps. Try Chrome or a newer Safari.', 5000);
+  ensureH();
+  const m = M.map, base = m.name.replace(/[^\w-]+/g, '_') || 'map';
+  const box = modal(`<h2>Export height map</h2><p>A greyscale image where white is the highest ground. Game engines turn it into terrain.</p>
+    <div class="typegrid"><button data-fmt="png">PNG · 16-bit<br><span class="hint">Unreal, Godot, Blender</span></button><button data-fmt="raw">RAW · 1025×1025<br><span class="hint">Unity</span></button></div>
+    <p class="hint" style="margin-top:10px">Size the terrain to ${m.w} × ${m.h} (map pixels) in the engine so the shape isn’t stretched. Sea level is ${Math.round(-H_MIN / (H_MAX - H_MIN) * 100)}% grey.</p>
+    <div class="row"><button class="btn" data-close>Close</button></div>`);
+  box.querySelector('.typegrid').onclick = async e => {
+    const b = e.target.closest('[data-fmt]'); if (!b) return;
+    if (b.dataset.fmt === 'png') {
+      const k = 1009 / Math.max(M.hw, M.hh), tw = Math.round(M.hw * k), th = Math.round(M.hh * k);
+      download(await png16(tw, th, resampleH(tw, th)), base + '_height.png');
+    } else {
+      const px = resampleH(1025, 1025), u = new Uint8Array(px.length * 2);
+      for (let i = 0; i < px.length; i++) { u[i * 2] = px[i] & 255; u[i * 2 + 1] = px[i] >> 8; }
+      download(new Blob([u], { type: 'application/octet-stream' }), base + '_height_1025.raw');
+    }
+    box.remove(); toast('Height map downloaded');
+  };
+}
+
+/* 3D view (plain WebGL): the height map as a mesh, draped with the map's art, with a water plane at sea level */
+let V3 = null;
+function mat4Persp(fovy, aspect, near, far) {
+  const f = 1 / Math.tan(fovy / 2), nf = 1 / (near - far);
+  return [f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) * nf, -1, 0, 0, 2 * far * near * nf, 0];
+}
+function mat4LookAt(e, c, u) {
+  let zx = e[0] - c[0], zy = e[1] - c[1], zz = e[2] - c[2], l = Math.hypot(zx, zy, zz); zx /= l; zy /= l; zz /= l;
+  let xx = u[1] * zz - u[2] * zy, xy = u[2] * zx - u[0] * zz, xz = u[0] * zy - u[1] * zx; l = Math.hypot(xx, xy, xz); xx /= l; xy /= l; xz /= l;
+  const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+  return [xx, yx, zx, 0, xy, yy, zy, 0, xz, yz, zz, 0, -(xx * e[0] + xy * e[1] + xz * e[2]), -(yx * e[0] + yy * e[1] + yz * e[2]), -(zx * e[0] + zy * e[1] + zz * e[2]), 1];
+}
+function mat4Mul(a, b) {
+  const o = new Array(16);
+  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) { let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k]; o[c * 4 + r] = s; }
+  return o;
+}
+function glProgram(gl, vs, fs) {
+  const sh = (t, src) => { const s = gl.createShader(t); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+  const p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  return p;
+}
+// Flatten the map's layers (background, art, paint, shapes, pins) into one picture to drape over the terrain.
+async function mapTexture() {
+  const m = M.map, k = Math.min(1, 2048 / Math.max(m.w, m.h));
+  const c = document.createElement('canvas'); c.width = Math.round(m.w * k); c.height = Math.round(m.h * k);
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = m.bg || '#1f4b5e'; ctx.fillRect(0, 0, c.width, c.height);
+  const img = $('#mimg'); if (img && img.complete && img.naturalWidth) ctx.drawImage(img, 0, 0, c.width, c.height);
+  const paint = $('#mpaint'); if (paint) ctx.drawImage(paint, 0, 0, c.width, c.height);
+  try {
+    const svg = $('#mvec').cloneNode(true);
+    svg.querySelectorAll('.h,.hit').forEach(n => n.remove());
+    svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    svg.querySelectorAll('text').forEach(t => t.setAttribute('font-family', 'sans-serif'));
+    const url = URL.createObjectURL(new Blob([svg.outerHTML], { type: 'image/svg+xml' }));
+    const si = new Image(); await new Promise((res, rej) => { si.onload = res; si.onerror = rej; si.src = url; });
+    ctx.drawImage(si, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+  } catch (e) { /* shapes are optional on the 3D texture */ }
+  m.pins.forEach(p => { const cd = card(p.card); if (!cd) return; ctx.fillStyle = typeOf(cd).color; ctx.strokeStyle = '#0e1512'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x * c.width, p.y * c.height, 9, 0, 7); ctx.fill(); ctx.stroke(); });
+  return c;
+}
+async function open3D() {
+  commitLayers();
+  const H = ensureH(), m = M.map;
+  const wrap = document.createElement('div'); wrap.className = 'v3d'; wrap.id = 'v3d';
+  wrap.innerHTML = `<canvas id="c3d"></canvas>
+    <div class="toolbar"><div class="tools-row"><button class="btn small solid" data-act="m-close3d">Back to map</button>
+      <label class="hint pill" style="display:flex;align-items:center;gap:6px">Height <input type="range" id="v3ex" min="0.2" max="3" step="0.1" value="${ui.ex3d || 1}"></label>
+      <button class="btn small${ui.water3d === false ? '' : ' on'}" data-act="m-water3d">Water</button></div>
+      <div class="tools-row"><span class="hint pill">${M.H.some(v => v) ? 'Drag to turn · pinch or scroll to zoom' : 'Flat so far: use Terrain in Edit map to raise mountains'}</span></div></div>`;
+  $('#mstage').appendChild(wrap);
+  const cv = $('#c3d'), gl = cv.getContext('webgl', { antialias: true });
+  if (!gl) { wrap.remove(); return toast('This browser can’t show 3D (WebGL is off).', 4000); }
+  const prog = glProgram(gl, `attribute vec3 p;attribute vec3 n;attribute vec2 uv;uniform mat4 mvp;varying vec3 vn;varying vec2 vuv;
+    void main(){vn=n;vuv=uv;gl_Position=mvp*vec4(p,1.);}`,
+    `precision mediump float;uniform sampler2D tex;varying vec3 vn;varying vec2 vuv;
+    void main(){vec3 L=normalize(vec3(-.5,.8,-.4));float d=max(dot(normalize(vn),L),0.);gl_FragColor=vec4(texture2D(tex,vuv).rgb*(.5+.62*d),1.);}`);
+  const flat = glProgram(gl, `attribute vec3 p;uniform mat4 mvp;void main(){gl_Position=mvp*vec4(p,1.);}`,
+    `precision mediump float;uniform vec4 col;void main(){gl_FragColor=col;}`);
+  const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([31, 75, 94, 255]));
+  const aspect = m.h / m.w, gk = Math.min(1, 240 / Math.max(M.hw, M.hh));   // ≤ 240×240 vertices keeps 16-bit indices
+  const cols = Math.max(2, Math.round(M.hw * gk)), rows = Math.max(2, Math.round(M.hh * gk));
+  const bufs = { pos: gl.createBuffer(), nrm: gl.createBuffer(), uv: gl.createBuffer(), idx: gl.createBuffer(), water: gl.createBuffer() };
+  const uv = new Float32Array(cols * rows * 2), idx = new Uint16Array((cols - 1) * (rows - 1) * 6);
+  for (let j = 0, o = 0; j < rows; j++) for (let i = 0; i < cols; i++) { uv[o++] = i / (cols - 1); uv[o++] = j / (rows - 1); }
+  for (let j = 0, o = 0; j < rows - 1; j++) for (let i = 0; i < cols - 1; i++) {
+    const a = j * cols + i, b = a + 1, c = a + cols, d = c + 1; idx.set([a, c, b, b, c, d], o); o += 6;
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, bufs.uv); gl.bufferData(gl.ARRAY_BUFFER, uv, gl.STATIC_DRAW);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufs.idx); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+  const wy = -0.002;
+  gl.bindBuffer(gl.ARRAY_BUFFER, bufs.water);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-.5, wy, -aspect / 2, .5, wy, -aspect / 2, -.5, wy, aspect / 2, .5, wy, aspect / 2]), gl.STATIC_DRAW);
+  function buildMesh() {
+    const ex = (ui.ex3d || 1) * 0.12, pos = new Float32Array(cols * rows * 3), nrm = new Float32Array(cols * rows * 3);
+    const hAt = (i, j) => { const x = i / (cols - 1) * (M.hw - 1), y = j / (rows - 1) * (M.hh - 1); return sampleBil(x, y) * ex; };
+    for (let j = 0, o = 0; j < rows; j++) for (let i = 0; i < cols; i++, o += 3) { pos[o] = i / (cols - 1) - .5; pos[o + 1] = hAt(i, j); pos[o + 2] = (j / (rows - 1) - .5) * aspect; }
+    const sx = 1 / (cols - 1), sz = aspect / (rows - 1);
+    for (let j = 0, o = 0; j < rows; j++) for (let i = 0; i < cols; i++, o += 3) {
+      const l = pos[(j * cols + Math.max(0, i - 1)) * 3 + 1], r = pos[(j * cols + Math.min(cols - 1, i + 1)) * 3 + 1];
+      const u = pos[(Math.max(0, j - 1) * cols + i) * 3 + 1], d = pos[(Math.min(rows - 1, j + 1) * cols + i) * 3 + 1];
+      const nx = (l - r) / (2 * sx), nz = (u - d) / (2 * sz), len = Math.hypot(nx, 1, nz);
+      nrm[o] = nx / len; nrm[o + 1] = 1 / len; nrm[o + 2] = nz / len;
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER, bufs.pos); gl.bufferData(gl.ARRAY_BUFFER, pos, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bufs.nrm); gl.bufferData(gl.ARRAY_BUFFER, nrm, gl.STATIC_DRAW);
+  }
+  const cam = { yaw: 0.6, pitch: 0.75, dist: cv.clientWidth < cv.clientHeight ? 2.3 : 1.5 };
+  let queued = false;
+  function draw() {
+    if (queued) return; queued = true;
+    requestAnimationFrame(() => {
+      queued = false;
+      if (!V3 || V3.gl !== gl) return;
+      const dpr = Math.min(2, devicePixelRatio || 1), w = cv.clientWidth * dpr, h = cv.clientHeight * dpr;
+      if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+      gl.viewport(0, 0, w, h); gl.clearColor(.055, .082, .07, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); gl.enable(gl.DEPTH_TEST);
+      const eye = [Math.cos(cam.pitch) * Math.sin(cam.yaw) * cam.dist, Math.sin(cam.pitch) * cam.dist, Math.cos(cam.pitch) * Math.cos(cam.yaw) * cam.dist];
+      const mvp = mat4Mul(mat4Persp(0.8, w / h, 0.01, 20), mat4LookAt(eye, [0, 0, 0], [0, 1, 0]));
+      gl.useProgram(prog);
+      const attr = (p, name, buf, n) => { const l = gl.getAttribLocation(p, name); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, n, gl.FLOAT, false, 0, 0); return l; };
+      const ls = [attr(prog, 'p', bufs.pos, 3), attr(prog, 'n', bufs.nrm, 3), attr(prog, 'uv', bufs.uv, 2)];
+      gl.uniformMatrix4fv(gl.getUniformLocation(prog, 'mvp'), false, mvp);
+      gl.bindTexture(gl.TEXTURE_2D, tex); gl.uniform1i(gl.getUniformLocation(prog, 'tex'), 0);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufs.idx); gl.drawElements(gl.TRIANGLES, idx.length, gl.UNSIGNED_SHORT, 0);
+      ls.forEach(l => gl.disableVertexAttribArray(l));
+      if (ui.water3d !== false) {
+        gl.useProgram(flat); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        const l = attr(flat, 'p', bufs.water, 3);
+        gl.uniformMatrix4fv(gl.getUniformLocation(flat, 'mvp'), false, mvp);
+        gl.uniform4fv(gl.getUniformLocation(flat, 'col'), [0.16, 0.42, 0.56, 0.72]);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); gl.disableVertexAttribArray(l); gl.disable(gl.BLEND);
+      }
+    });
+  }
+  V3 = { gl, draw, buildMesh, cam, wrap };
+  buildMesh(); draw();
+  mapTexture().then(c => {
+    if (!V3 || V3.gl !== gl) return;
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    try { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c); } catch (e) { /* tainted canvas: keep the plain colour */ }
+    draw();
+  });
+  $('#v3ex').oninput = e => { ui.ex3d = +e.target.value; saveJSON(UI_KEY, ui); buildMesh(); draw(); };
+  const pts = new Map(); let g = null;
+  cv.addEventListener('pointerdown', e => {
+    cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 2) { const [a, b] = [...pts.values()]; g = { pinch: Math.hypot(a.x - b.x, a.y - b.y), d0: cam.dist }; }
+    else g = { x: e.clientX, y: e.clientY, yaw: cam.yaw, pitch: cam.pitch };
+  });
+  cv.addEventListener('pointermove', e => {
+    if (!pts.has(e.pointerId) || !g) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (g.pinch) { if (pts.size < 2) return; const [a, b] = [...pts.values()]; cam.dist = Math.max(.35, Math.min(4, g.d0 * g.pinch / Math.hypot(a.x - b.x, a.y - b.y))); return draw(); }
+    cam.yaw = g.yaw - (e.clientX - g.x) * 0.008; cam.pitch = Math.max(0.12, Math.min(1.5, g.pitch + (e.clientY - g.y) * 0.006)); draw();
+  });
+  const end = e => { pts.delete(e.pointerId); if (!pts.size) g = null; };
+  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  cv.addEventListener('wheel', e => { e.preventDefault(); cam.dist = Math.max(.35, Math.min(4, cam.dist * Math.exp(e.deltaY * .0012))); draw(); }, { passive: false });
+}
+function sampleBil(x, y) {
+  const { H, hw, hh } = M, x0 = Math.floor(x), y0 = Math.floor(y), x1 = Math.min(hw - 1, x0 + 1), y1 = Math.min(hh - 1, y0 + 1), ax = x - x0, ay = y - y0;
+  return (H[y0 * hw + x0] * (1 - ax) + H[y0 * hw + x1] * ax) * (1 - ay) + (H[y1 * hw + x0] * (1 - ax) + H[y1 * hw + x1] * ax) * ay;
+}
+function close3D() {
+  if (!V3) return;
+  const ext = V3.gl.getExtension('WEBGL_lose_context'); if (ext) ext.loseContext();
+  V3.wrap.remove(); V3 = null;
 }
 
 /* ---------- timeline ---------- */
@@ -1611,8 +1962,9 @@ async function doSync(opts) {
     if (opts.loud) toast(e.message, 6000);
   }
 }
-function mediaIds() { const s = new Set(); W.cards.forEach(c => c.img && s.add(c.img)); W.maps.forEach(m => { if (m.img) s.add(m.img); if (m.paint) s.add(m.paint); }); return [...s]; }
-const mediaPath = id => MEDIA_DIR + id + (id.startsWith('mp') ? '.png' : '.jpg');
+function mediaIds() { const s = new Set(); W.cards.forEach(c => c.img && s.add(c.img)); W.maps.forEach(m => { if (m.img) s.add(m.img); if (m.paint) s.add(m.paint); if (m.height) s.add(m.height); }); return [...s]; }
+const mediaType = id => id.startsWith('mp') ? 'image/png' : id.startsWith('mh') ? 'application/octet-stream' : 'image/jpeg';
+const mediaPath = id => MEDIA_DIR + id + { 'image/png': '.png', 'application/octet-stream': '.bin', 'image/jpeg': '.jpg' }[mediaType(id)];
 async function pushMedia() {
   const done = new Set(meta.syncedMedia);
   for (const id of mediaIds()) {
@@ -1640,7 +1992,7 @@ async function pullMedia() {
   for (const id of mediaIds()) {
     if (have.has(id)) continue;
     const r = await api(mediaPath(id), { raw: true }); if (!r.ok) continue;
-    const blob = await r.blob(), type = id.startsWith('mp') ? 'image/png' : 'image/jpeg';
+    const blob = await r.blob(), type = mediaType(id);
     const d = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(new Blob([blob], { type })); });
     media[id] = d; await idbPut('media', id, d);
     if (!meta.syncedMedia.includes(id)) meta.syncedMedia.push(id);
@@ -1771,7 +2123,7 @@ $('#newBtn').onclick = () => { if (!W) return; document.body.classList.remove('s
 $('#syncBtn').onclick = openSettings;
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) return;
-  if (mapEditing()) commitPaint();
+  if (mapEditing()) commitLayers();
   if (meta.dirty && gh.token) sync();
 });
 window.addEventListener('beforeunload', e => { if (editing && editing.dirty) { e.preventDefault(); e.returnValue = ''; } });
