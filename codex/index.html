@@ -25,8 +25,16 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
-body{background:radial-gradient(120% 90% at 50% -10%,#1b2a24 0%,var(--ink) 55%,#080c0a 100%) fixed;color:var(--paper);
-  font-family:var(--serif);font-size:18px;overflow:hidden}
+html{background:var(--ink)}
+body{background:transparent;color:var(--paper);font-family:var(--serif);font-size:18px;overflow:hidden}
+/* glass theme: a world background (aurora by default, or an uploaded image) behind see-through panels */
+#bg{position:fixed;inset:0;z-index:-1;overflow:hidden;
+  background:radial-gradient(60% 50% at 18% 22%,rgba(91,224,200,.35),transparent 70%),radial-gradient(55% 45% at 82% 30%,rgba(124,108,255,.32),transparent 70%),
+    radial-gradient(70% 55% at 60% 95%,rgba(255,202,122,.26),transparent 70%),radial-gradient(120% 90% at 50% -10%,#1b2a24 0%,var(--ink) 60%,#080c0a 100%)}
+#bg .layer{position:absolute;inset:-30px;background-size:cover;background-position:center;opacity:0;transition:opacity .7s;filter:saturate(1.1)}
+#bg .layer.on{opacity:1}
+#bg:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,12,10,.42),rgba(8,12,10,.66))}
+:root{--glass:rgba(14,21,18,.5);--glass2:rgba(19,30,25,.62);--blur:blur(18px) saturate(140%)}
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer;background:none;border:0}
 a{color:var(--glow)}
@@ -34,7 +42,7 @@ a{color:var(--glow)}
 
 /* header */
 header{height:var(--hdr);display:flex;align-items:center;gap:12px;padding:0 14px;border-bottom:1px solid var(--line);
-  background:rgba(14,21,18,.92);position:relative;z-index:20}
+  background:var(--glass);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);position:relative;z-index:20}
 .logo{font-family:var(--ui);font-weight:700;letter-spacing:.18em;font-size:15px;color:var(--brass);white-space:nowrap;text-decoration:none}
 .logo small{color:var(--smoke);font-weight:500;letter-spacing:.08em;margin-left:6px}
 nav.views{display:flex;gap:2px;margin-left:8px}
@@ -44,7 +52,7 @@ nav.views a.on{color:var(--ink);background:var(--brass)}
 .search{flex:1;max-width:340px;margin-left:auto;position:relative}
 .search input{width:100%;background:var(--ink2);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-family:var(--ui);font-size:15px}
 .search input:focus{outline:none;border-color:var(--brass-dim)}
-.results{position:absolute;top:40px;left:0;right:0;background:var(--ink2);border:1px solid var(--line);border-radius:8px;
+.results{position:absolute;top:40px;left:0;right:0;background:rgba(19,30,25,.92);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);border:1px solid var(--line);border-radius:8px;
   max-height:60vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.5);z-index:30}
 .results button{display:flex;gap:8px;align-items:baseline;width:100%;text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
 .results button:hover,.results button.sel{background:var(--ink3)}
@@ -58,7 +66,7 @@ nav.views a.on{color:var(--ink);background:var(--brass)}
 
 /* layout */
 .app{display:flex;height:calc(100% - var(--hdr))}
-aside{width:290px;flex:none;border-right:1px solid var(--line);display:flex;flex-direction:column;background:rgba(19,30,25,.6)}
+aside{width:290px;flex:none;border-right:1px solid var(--line);display:flex;flex-direction:column;background:var(--glass);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
 .side-top{padding:10px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line)}
 .side-top .row{display:flex;gap:6px}
 select,.inp{background:var(--ink2);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-family:var(--ui);font-size:14px;min-width:0}
@@ -85,7 +93,8 @@ select,.inp{background:var(--ink2);border:1px solid var(--line);border-radius:6p
 main{flex:1;overflow:auto;position:relative;min-width:0}
 
 /* article */
-article{max-width:780px;margin:0 auto;padding:28px 26px 120px}
+article{max-width:820px;margin:18px auto 90px;padding:28px 26px 60px;background:var(--glass2);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
+  border:1px solid rgba(233,224,201,.1);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
 .crumbs{font-family:var(--ui);font-size:14px;color:var(--smoke);margin-bottom:6px}
 .crumbs a{color:var(--smoke)}
 .badges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
@@ -96,7 +105,7 @@ h1.title{font-size:42px;font-weight:600;line-height:1.05;color:var(--paper);marg
 .review{border:1px dashed var(--brass-dim);border-radius:10px;padding:12px 14px;margin:0 0 18px;background:rgba(201,162,94,.06);
   display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-family:var(--ui);font-size:15px}
 .review span{flex:1;min-width:200px;color:var(--smoke)}
-.cover{width:100%;max-height:420px;object-fit:cover;border-radius:10px;border:1px solid var(--line);margin-bottom:16px;display:block}
+.cover{width:100%;max-height:460px;object-fit:contain;background:rgba(0,0,0,.22);border-radius:10px;border:1px solid var(--line);margin-bottom:16px;display:block}
 table.fields{border-collapse:collapse;margin:0 0 18px;font-size:17px;width:100%}
 table.fields td{padding:5px 10px;border-bottom:1px solid var(--line);vertical-align:top}
 table.fields td:first-child{font-family:var(--ui);font-weight:600;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--brass);width:34%;padding-top:8px}
@@ -118,6 +127,14 @@ a.wl:hover{border-bottom-style:solid}
 a.wl.missing{color:var(--bad);border-bottom-color:rgba(224,112,91,.5)}
 .empty-body{color:var(--smoke);font-style:italic}
 section.sub{margin-top:30px}
+.caption{font-style:italic;color:var(--smoke);font-size:16px;margin:-8px 0 16px}
+.emblem{width:46px;height:46px;border-radius:10px;object-fit:contain;vertical-align:middle;margin-right:10px;background:rgba(0,0,0,.25)}
+.item img.ic{width:16px;height:16px;border-radius:4px;object-fit:contain;flex:none}
+.bgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:8px}
+.bgs .bgc{position:relative;border:2px solid var(--line);border-radius:10px;overflow:hidden;aspect-ratio:16/10;background:var(--ink3) center/cover;cursor:pointer}
+.bgs .bgc.on{border-color:var(--glow)}
+.bgs .bgc span{position:absolute;left:0;right:0;bottom:0;padding:3px 7px;font-family:var(--ui);font-size:13px;background:rgba(8,12,10,.7)}
+.bgs .bgc .x{position:absolute;top:4px;right:6px;color:var(--bad);font-family:var(--ui);font-size:18px;text-shadow:0 0 4px #000}
 section.sub h3{font-family:var(--ui);font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:var(--smoke);margin-bottom:8px;
   display:flex;align-items:center;gap:8px}
 section.sub h3 .btn{margin-left:auto}
@@ -150,7 +167,7 @@ textarea.inp{font-family:var(--serif);font-size:18px;line-height:1.5;min-height:
 .home h1{font-size:46px;font-weight:600;color:var(--paper);line-height:1.05}
 .home .lede{color:var(--smoke);font-size:20px;margin:8px 0 22px}
 .stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:26px}
-.stat{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:rgba(19,30,25,.6);text-align:left}
+.stat{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:rgba(14,21,18,.45);text-align:left}
 .stat:hover{border-color:var(--brass-dim)}
 .stat b{display:block;font-family:var(--ui);font-size:26px;color:var(--paper)}
 .stat span{font-family:var(--ui);font-size:12px;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
@@ -174,7 +191,7 @@ svg.graph line.men{stroke-dasharray:3 4;opacity:.55}
 svg.graph line.dim{opacity:.07}
 svg.graph line.hi{stroke:var(--glow);opacity:1}
 svg.graph text.el{font-family:var(--ui);font-size:10px;fill:var(--brass);paint-order:stroke;stroke:var(--ink);stroke-width:3px}
-.info{position:absolute;left:10px;right:10px;bottom:10px;max-width:460px;background:rgba(19,30,25,.96);border:1px solid var(--brass-dim);
+.info{position:absolute;left:10px;right:10px;bottom:10px;max-width:460px;background:rgba(19,30,25,.78);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);border:1px solid var(--brass-dim);
   border-radius:12px;padding:12px 14px;z-index:6;box-shadow:0 10px 40px rgba(0,0,0,.5)}
 .info h4{font-size:24px;font-weight:600;line-height:1.1;margin:4px 0}
 .info p{font-size:16px;color:var(--smoke);margin:4px 0 10px;max-height:5.4em;overflow:hidden}
@@ -229,7 +246,7 @@ svg.graph text.el{font-family:var(--ui);font-size:10px;fill:var(--brass);paint-o
 
 /* modal */
 .modal{position:fixed;inset:0;background:rgba(5,8,7,.7);display:flex;align-items:flex-start;justify-content:center;z-index:50;padding:8vh 14px 14px}
-.modal .box{width:100%;max-width:520px;background:var(--ink2);border:1px solid var(--brass-dim);border-radius:14px;padding:18px;max-height:84vh;overflow:auto;
+.modal .box{width:100%;max-width:520px;background:rgba(19,30,25,.82);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);border:1px solid var(--brass-dim);border-radius:14px;padding:18px;max-height:84vh;overflow:auto;
   box-shadow:0 20px 60px rgba(0,0,0,.6)}
 .modal h2{font-size:28px;font-weight:600;margin-bottom:10px}
 .modal p{color:var(--smoke);font-size:16px;margin-bottom:10px}
@@ -247,8 +264,10 @@ svg.graph text.el{font-family:var(--ui);font-size:10px;fill:var(--brass);paint-o
 @media (max-width:820px){
   :root{--hdr:52px}
   .menubtn{display:block}
+  /* a backdrop-filter on the header would trap the fixed bottom tab bar inside it */
+  header{-webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(14,21,18,.88)}
   .logo small{display:none}
-  nav.views{position:fixed;bottom:0;left:0;right:0;margin:0;background:rgba(14,21,18,.97);border-top:1px solid var(--line);
+  nav.views{position:fixed;bottom:0;left:0;right:0;margin:0;background:rgba(14,21,18,.72);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);border-top:1px solid var(--line);
     justify-content:space-around;padding:6px 6px calc(6px + env(safe-area-inset-bottom));z-index:25}
   nav.views a{flex:1;text-align:center;font-size:13px}
   .app{height:calc(100% - var(--hdr) - 48px - env(safe-area-inset-bottom))}
@@ -257,7 +276,7 @@ svg.graph text.el{font-family:var(--ui);font-size:10px;fill:var(--brass);paint-o
   body.side-open .mob-scrim{display:block;position:fixed;inset:0;top:var(--hdr);background:rgba(0,0,0,.5);z-index:29}
   .search{max-width:none}
   .syncbtn .lbl{display:none}
-  article{padding:20px 16px 120px}
+  article{padding:20px 16px 40px;margin:10px 8px 90px;border-radius:14px}
   h1.title{font-size:34px}
   .form .two{grid-template-columns:1fr}
   .typegrid{grid-template-columns:1fr 1fr}
@@ -267,6 +286,7 @@ svg.graph text.el{font-family:var(--ui);font-size:10px;fill:var(--brass);paint-o
 </style>
 </head>
 <body>
+<div id="bg"><div class="layer"></div><div class="layer"></div></div>
 <header>
   <button class="menubtn" id="menuBtn" aria-label="Cards">☰</button>
   <a class="logo" href="#/">CODEX<small>2.0 · GENESIS</small></a>
@@ -366,7 +386,7 @@ const idbDel = (s, k) => idb(s, 'readwrite', st => st.delete(k));
 const idbKeys = s => idb(s, 'readonly', st => st.getAllKeys());
 
 /* ---------- world ---------- */
-function blankWorld() { return { format: 'codex2', version: 1, updated: Date.now(), cards: [], relations: [], maps: [], canvas: {}, deleted: {} }; }
+function blankWorld() { return { format: 'codex2', version: 1, updated: Date.now(), cards: [], relations: [], maps: [], canvas: {}, deleted: {}, backgrounds: [], theme: {} }; }
 function normalize(w) {
   w = Object.assign(blankWorld(), w || {});
   w.cards = (w.cards || []).map(c => Object.assign({ aliases: [], tags: [], fields: [], status: 'draft', parent: null, body: '', autolink: true, type: 'note', order: 0 }, c));
@@ -511,13 +531,14 @@ function renderList() {
     const sortC = a => a.sort((x, y) => (x.order - y.order) || x.title.localeCompare(y.title));
     const walk = (p, depth) => sortC(kids[p] || []).forEach(c => {
       html += `<button class="item st-${c.status}${c.id === cur ? ' cur' : ''}" data-open="${esc(c.id)}" style="padding-left:${12 + depth * 14}px">` +
-        `<span class="pip" style="background:${typeOf(c).color};opacity:${c.status === 'v35' ? .45 : 1}"></span><span class="t">${esc(c.title)}</span>` +
+        (c.icon ? `<img class="ic" data-media="${esc(c.icon)}" alt="">` : `<span class="pip" style="background:${typeOf(c).color};opacity:${c.status === 'v35' ? .45 : 1}"></span>`) + `<span class="t">${esc(c.title)}</span>` +
         (c.status === 'v35' ? '<span class="tag35">v35</span>' : '') + '</button>';
       walk(c.id, depth + 1);
     });
     walk('', 0);
   }
   $('#list').innerHTML = html || '<div class="none" style="padding:14px">Nothing matches these filters.</div>';
+  hydrateMedia($('#list'));
 }
 
 /* ---------- routing ---------- */
@@ -541,7 +562,7 @@ function render() {
   close3D();
   if (mapEditing() && (r.v !== 'map' || (r.id && r.id !== M.map.id))) exitEdit(true);
   document.querySelectorAll('#views a').forEach(a => a.classList.toggle('on', a.dataset.v === view()));
-  renderList();
+  renderList(); applyBg();
   if (!W) return renderWelcome();
   if (r.v === 'card' && r.id && card(r.id)) return editing && editing.id === r.id ? renderEdit(card(r.id)) : renderCard(card(r.id));
   if (r.v === 'graph') return renderGraph();
@@ -599,7 +620,7 @@ function renderCard(c) {
     <div class="badges"><span class="badge" style="color:${t.color};border-color:${t.color}">${t.icon} ${t.label}</span>
       <span class="badge" style="color:${st.color};border-color:${st.color}">${st.label}</span>
       ${c.tags.map(g => `<span class="badge" style="color:var(--smoke);border-color:var(--line)">#${esc(g)}</span>`).join('')}</div>
-    <h1 class="title">${esc(c.title)}</h1>
+    <h1 class="title">${c.icon ? `<img class="emblem" data-media="${esc(c.icon)}" alt="">` : ''}${esc(c.title)}</h1>
     ${c.aliases.length ? `<div class="aka">also: ${c.aliases.map(esc).join(', ')}</div>` : ''}
     ${c.status === 'v35' ? `<div class="review"><span>From the original Codex. Does it still fit 2.0?</span>
       <button class="btn small" data-status="draft">Keep as draft</button><button class="btn small" data-status="canon">Canon</button>
@@ -608,6 +629,7 @@ function renderCard(c) {
       ${c.status !== 'v35' ? `<select data-act="set-status" class="inp">${Object.entries(STATUSES).map(([k, s]) => `<option value="${k}"${k === c.status ? ' selected' : ''}>${s.label}</option>`).join('')}</select>` : ''}
       <button class="btn" data-act="graph-here">Show in graph</button></div>
     ${c.img ? `<img class="cover" data-media="${esc(c.img)}" alt="">` : ''}
+    ${c.img && c.imgCaption ? `<p class="caption">${esc(c.imgCaption)}</p>` : ''}
     ${fields.length ? `<table class="fields">${fields.map(f => `<tr><td>${esc(f.k)}</td><td>${inline(f.v, null)}</td></tr>`).join('')}</table>` : ''}
     <div class="body">${c.body.trim() ? renderBody(c.body, c.id) : '<p class="empty-body">Nothing written yet. Tap Edit to start.</p>'}</div>
     ${kids.length ? `<section class="sub"><h3>Inside ${esc(c.title)}</h3><div class="chips">${kids.map(k => chip(k)).join('')}</div></section>` : ''}
@@ -648,6 +670,10 @@ function renderEdit(c) {
       <label>Inside<select name="parent"><option value="">(top level)</option>${sameType.map(x => `<option value="${esc(x.id)}"${x.id === c.parent ? ' selected' : ''}>${esc(x.title)}</option>`).join('')}</select></label>
       <label class="check" style="align-self:end;padding-bottom:8px"><input type="checkbox" name="autolink"${c.autolink ? ' checked' : ''}> Link this name automatically in other cards</label>
     </div>
+    <div class="two">
+      <label>Background<select name="bg"><option value="">(same as the card it’s inside)</option>${W.backgrounds.map(b => `<option value="${esc(b.id)}"${b.id === c.bg ? ' selected' : ''}>${esc(b.name)}</option>`).join('')}</select></label>
+      <label>Image caption<input class="inp" name="imgCaption" value="${esc(c.imgCaption || '')}" placeholder="Shown under the card image"></label>
+    </div>
     <label>Details<span class="hint">Short facts shown as a table at the top.</span></label>
     <div id="frows">${c.fields.map(f => frow(f.k, f.v)).join('')}</div>
     <div><button type="button" class="btn small" data-act="add-field">+ Detail</button></div>
@@ -682,6 +708,7 @@ function saveEdit(c, f) {
   Object.assign(c, {
     title, type: el.type.value, status: el.status.value, aliases: list(el.aliases.value), tags: list(el.tags.value),
     parent: el.parent.value || null, autolink: el.autolink.checked, body: el.body.value.replace(/\s+$/, ''),
+    bg: el.bg.value || null, imgCaption: el.imgCaption.value.trim(),
     fields: [...f.querySelectorAll('.frow')].map(r => ({ k: r.querySelector('[data-fk]').value.trim(), v: r.querySelector('[data-fv]').value.trim() })).filter(x => x.k || x.v),
   });
   touch(c); changed(); editing = null; toast('Saved'); render();
@@ -1926,6 +1953,8 @@ function merge(a, b) {
   out.cards = pick(a.cards, b.cards); out.relations = pick(a.relations, b.relations); out.maps = pick(a.maps, b.maps);
   out.canvas = Object.assign({}, b.canvas, a.canvas);
   out.templates = Object.assign({}, b.templates, a.templates);
+  out.backgrounds = pick(a.backgrounds || [], b.backgrounds || []);
+  out.theme = (a.updated || 0) >= (b.updated || 0) ? Object.assign({}, b.theme, a.theme) : Object.assign({}, a.theme, b.theme);
   out.updated = Math.max(a.updated || 0, b.updated || 0);
   return out;
 }
@@ -1962,8 +1991,8 @@ async function doSync(opts) {
     if (opts.loud) toast(e.message, 6000);
   }
 }
-function mediaIds() { const s = new Set(); W.cards.forEach(c => c.img && s.add(c.img)); W.maps.forEach(m => { if (m.img) s.add(m.img); if (m.paint) s.add(m.paint); if (m.height) s.add(m.height); }); return [...s]; }
-const mediaType = id => id.startsWith('mp') ? 'image/png' : id.startsWith('mh') ? 'application/octet-stream' : 'image/jpeg';
+function mediaIds() { const s = new Set(); W.cards.forEach(c => { if (c.img) s.add(c.img); if (c.icon) s.add(c.icon); }); W.backgrounds.forEach(b => b.img && s.add(b.img)); W.maps.forEach(m => { if (m.img) s.add(m.img); if (m.paint) s.add(m.paint); if (m.height) s.add(m.height); }); return [...s]; }
+const mediaType = id => id.startsWith('mp') || id.startsWith('ma') ? 'image/png' : id.startsWith('mh') ? 'application/octet-stream' : 'image/jpeg';
 const mediaPath = id => MEDIA_DIR + id + { 'image/png': '.png', 'application/octet-stream': '.bin', 'image/jpeg': '.jpg' }[mediaType(id)];
 async function pushMedia() {
   const done = new Set(meta.syncedMedia);
@@ -1999,6 +2028,51 @@ async function pullMedia() {
   }
 }
 
+/* ---------- backgrounds ---------- */
+// The page background follows the open card (or the card it's inside), else the world default, else the built-in aurora.
+let bgShown = null, bgFlip = 0;
+function bgFor() {
+  if (!W) return null;
+  const r = route(), has = id => W.backgrounds.some(b => b.id === id);
+  let c = r.v === 'card' && r.id ? card(r.id) : null;
+  for (let i = 0; c && i < 20; i++, c = card(c.parent)) if (c.bg && has(c.bg)) return c.bg;
+  return W.theme.bg && has(W.theme.bg) ? W.theme.bg : null;
+}
+async function applyBg() {
+  const id = bgFor(); if (id === bgShown) return;
+  bgShown = id;
+  const layers = document.querySelectorAll('#bg .layer');
+  const b = id && W.backgrounds.find(x => x.id === id), d = b && await getMedia(b.img);
+  if (bgShown !== id) return;
+  if (!d) { layers.forEach(l => l.classList.remove('on')); return; }
+  bgFlip ^= 1;
+  layers[bgFlip].style.backgroundImage = `url("${d}")`; layers[bgFlip].classList.add('on'); layers[bgFlip ^ 1].classList.remove('on');
+}
+function drawBgList() {
+  const el = $('#bgList'); if (!el || !W) return;
+  el.innerHTML = `<div class="bgc${W.theme.bg ? '' : ' on'}" data-bgset="" style="background:radial-gradient(60% 60% at 30% 30%,rgba(91,224,200,.5),transparent),radial-gradient(60% 60% at 75% 40%,rgba(124,108,255,.5),transparent),#0e1512"><span>Aurora (built in)</span></div>` +
+    W.backgrounds.map(b => `<div class="bgc${W.theme.bg === b.id ? ' on' : ''}" data-bgset="${esc(b.id)}" data-bgimg="${esc(b.img)}"><span>${esc(b.name)}</span><button class="x" data-bgdel="${esc(b.id)}" title="Delete">×</button></div>`).join('');
+  el.querySelectorAll('[data-bgimg]').forEach(async n => { const d = await getMedia(n.dataset.bgimg); if (d) n.style.backgroundImage = `url("${d}")`; });
+}
+async function addBackground() {
+  const f = await chooseFile('image/*'); if (!f) return;
+  const name = prompt('Name this background (e.g. City at night)', f.name.replace(/\.[^.]+$/, '')); if (name === null) return;
+  try {
+    const img = await shrinkImage(f, 2000);
+    const b = { id: uid('bg'), name: name.trim() || 'Background', img: await storeMedia(img.data), updated: Date.now() };
+    W.backgrounds.push(b);
+    if (!W.theme.bg) W.theme.bg = b.id;
+    changed(); drawBgList(); bgShown = undefined; applyBg(); toast('Background added');
+  } catch (e) { toast(e.message, 4000); }
+}
+function deleteBackground(id) {
+  const b = W.backgrounds.find(x => x.id === id); if (!b || !confirm(`Delete the background “${b.name}”?`)) return;
+  W.deleted[id] = Date.now(); W.backgrounds = W.backgrounds.filter(x => x.id !== id);
+  if (W.theme.bg === id) W.theme.bg = null;
+  W.cards.forEach(c => { if (c.bg === id) { c.bg = null; touch(c); } });
+  changed(); drawBgList(); applyBg();
+}
+
 /* ---------- settings, import, export ---------- */
 function openSettings() {
   const m = modal(`<h2>Sync &amp; backup</h2>
@@ -2011,6 +2085,10 @@ function openSettings() {
       <div class="row"><button class="btn solid" type="submit">Save &amp; sync</button>${gh.token ? '<button class="btn" type="button" data-act="disconnect">Forget token</button>' : ''}</div>
     </form>
     <p class="hint" style="margin-top:10px">${esc(syncMsg || '')}${meta.lastSync ? ' · last sync ' + new Date(meta.lastSync).toLocaleString() : ''}</p>
+    <h2 style="font-size:22px;margin-top:18px">Backgrounds</h2>
+    <p class="hint">Tap one to make it the default. A card can pick its own in Edit, and cards inside it follow. Images stay in the private repo.</p>
+    <div class="bgs" id="bgList"></div>
+    <div class="row"><button class="btn" data-act="bg-add">Add background</button></div>
     <h2 style="font-size:22px;margin-top:18px">Backup</h2>
     <div class="row"><button class="btn" data-act="export">Download a backup</button><button class="btn" data-act="import">Open a backup</button></div>
     <div class="row"><button class="btn" data-close>Close</button></div>`);
@@ -2020,6 +2098,7 @@ function openSettings() {
     saveJSON(GH_KEY, gh); m.remove(); meta.baseSha = null;
     await sync({ loud: true, render: true });
   };
+  drawBgList();
   m.addEventListener('click', e => {
     if (e.target.dataset.act === 'disconnect') { gh.token = ''; saveJSON(GH_KEY, gh); m.remove(); setSync('local'); toast('Token removed from this browser'); }
   });
@@ -2069,6 +2148,10 @@ document.addEventListener('click', async e => {
   if (ft) { ui.fType = ft.dataset.ftype; $('#fType').value = ui.fType; saveJSON(UI_KEY, ui); renderList(); document.body.classList.add('side-open'); return; }
   const stb = t.closest('[data-status]');
   if (stb) { const c = card(route().id); setStatus(c, stb.dataset.status); toast(STATUSES[stb.dataset.status].label + ': ' + c.title); const n = nextToReview(c.id); return n ? openCard(n.id) : render(); }
+  const bd = t.closest('[data-bgdel]');
+  if (bd) return deleteBackground(bd.dataset.bgdel);
+  const bs = t.closest('[data-bgset]');
+  if (bs) { W.theme.bg = bs.dataset.bgset || null; changed(); drawBgList(); return applyBg(); }
   const dr = t.closest('[data-delrel]');
   if (dr) { W.deleted[dr.dataset.delrel] = Date.now(); W.relations = W.relations.filter(r => r.id !== dr.dataset.delrel); changed(); return render(); }
   const act = t.closest('[data-act]'); if (!act || act.tagName === 'SELECT') return;
@@ -2076,6 +2159,7 @@ document.addEventListener('click', async e => {
   const c = W && route().id ? card(route().id) : null;
   switch (act.dataset.act) {
     case 'settings': return openSettings();
+    case 'bg-add': return addBackground();
     case 'import': return importWorld();
     case 'export': return exportWorld();
     case 'start-empty': W = blankWorld(); changed(); return render();
