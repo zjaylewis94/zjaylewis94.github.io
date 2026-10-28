@@ -1,0 +1,1340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0e1512">
+<title>Codex 2.0 · Project Genesis</title>
+<!--
+  Codex 2.0: a worldbuilding wiki for Project Genesis.
+  This file is only the shell. It holds no story content (a public copy is served at
+  zjaylewis94.github.io/codex/, so keep names, places and lore out of it): the world lives in data/world.json
+  in the private codex repo and loads with the user's GitHub token (or from an imported file).
+  Local copy: IndexedDB "codex2_v1" (world + images), so it stays out of the shared 5 MB localStorage.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Rajdhani:wght@500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0e1512; --ink2:#131e19; --ink3:#1a2822; --line:#2b3a33;
+  --brass:#c9a25e; --brass-dim:#8a7040; --paper:#e9e0c9; --smoke:rgba(233,224,201,.6);
+  --lamp:#ffca7a; --glow:#5be0c8; --glow2:#7c6cff; --bad:#e0705b; --ok:#6fd08c;
+  --ui:'Rajdhani',system-ui,sans-serif; --serif:'Cormorant Garamond',Georgia,serif; --mono:'DM Mono',ui-monospace,monospace;
+  --hdr:56px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:radial-gradient(120% 90% at 50% -10%,#1b2a24 0%,var(--ink) 55%,#080c0a 100%) fixed;color:var(--paper);
+  font-family:var(--serif);font-size:18px;overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0}
+a{color:var(--glow)}
+.hidden{display:none!important}
+
+/* header */
+header{height:var(--hdr);display:flex;align-items:center;gap:12px;padding:0 14px;border-bottom:1px solid var(--line);
+  background:rgba(14,21,18,.92);position:relative;z-index:20}
+.logo{font-family:var(--ui);font-weight:700;letter-spacing:.18em;font-size:15px;color:var(--brass);white-space:nowrap;text-decoration:none}
+.logo small{color:var(--smoke);font-weight:500;letter-spacing:.08em;margin-left:6px}
+nav.views{display:flex;gap:2px;margin-left:8px}
+nav.views a{font-family:var(--ui);font-weight:600;font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--smoke);
+  text-decoration:none;padding:6px 10px;border-radius:6px}
+nav.views a.on{color:var(--ink);background:var(--brass)}
+.search{flex:1;max-width:340px;margin-left:auto;position:relative}
+.search input{width:100%;background:var(--ink2);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-family:var(--ui);font-size:15px}
+.search input:focus{outline:none;border-color:var(--brass-dim)}
+.results{position:absolute;top:40px;left:0;right:0;background:var(--ink2);border:1px solid var(--line);border-radius:8px;
+  max-height:60vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.5);z-index:30}
+.results button{display:flex;gap:8px;align-items:baseline;width:100%;text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+.results button:hover,.results button.sel{background:var(--ink3)}
+.results .snip{font-size:14px;color:var(--smoke);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.syncbtn{display:flex;align-items:center;gap:6px;font-family:var(--ui);font-size:13px;color:var(--smoke);padding:6px 8px;border-radius:6px}
+.syncbtn:hover{background:var(--ink3)}
+.dot{width:9px;height:9px;border-radius:50%;background:#56605b;flex:none}
+.dot.ok{background:var(--ok)} .dot.dirty{background:var(--lamp)} .dot.err{background:var(--bad)} .dot.busy{background:var(--glow);animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.3}}
+.menubtn{display:none;font-size:22px;color:var(--brass);padding:4px 6px}
+
+/* layout */
+.app{display:flex;height:calc(100% - var(--hdr))}
+aside{width:290px;flex:none;border-right:1px solid var(--line);display:flex;flex-direction:column;background:rgba(19,30,25,.6)}
+.side-top{padding:10px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line)}
+.side-top .row{display:flex;gap:6px}
+select,.inp{background:var(--ink2);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-family:var(--ui);font-size:14px;min-width:0}
+.side-top select{flex:1}
+.btn{font-family:var(--ui);font-weight:600;font-size:14px;letter-spacing:.04em;padding:7px 12px;border-radius:7px;border:1px solid var(--brass-dim);color:var(--brass)}
+.btn:hover{background:rgba(201,162,94,.1)}
+.btn.solid{background:var(--brass);color:var(--ink);border-color:var(--brass)}
+.btn.solid:hover{background:var(--lamp)}
+.btn.small{font-size:13px;padding:4px 9px}
+.btn.danger{border-color:#7a3a30;color:var(--bad)}
+.btn.on{background:rgba(91,224,200,.15);border-color:var(--glow);color:var(--glow)}
+.list{overflow:auto;flex:1;padding:6px 0 30px}
+.grp{font-family:var(--ui);font-weight:700;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--smoke);
+  padding:12px 12px 4px;display:flex;align-items:center;gap:6px;width:100%;text-align:left}
+.grp .n{margin-left:auto;font-weight:500}
+.item{display:flex;align-items:center;gap:7px;width:100%;text-align:left;padding:4px 12px;font-size:16px;line-height:1.25;color:var(--paper)}
+.item:hover{background:var(--ink3)}
+.item.cur{background:rgba(201,162,94,.16);box-shadow:inset 3px 0 var(--brass)}
+.item .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item.st-v35 .t{color:var(--smoke)}
+.item.st-cut .t{text-decoration:line-through;color:#6c756f}
+.pip{width:7px;height:7px;border-radius:50%;flex:none}
+.tag35{font-family:var(--mono);font-size:10px;color:var(--brass-dim);margin-left:auto;flex:none}
+main{flex:1;overflow:auto;position:relative;min-width:0}
+
+/* article */
+article{max-width:780px;margin:0 auto;padding:28px 26px 120px}
+.crumbs{font-family:var(--ui);font-size:14px;color:var(--smoke);margin-bottom:6px}
+.crumbs a{color:var(--smoke)}
+.badges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.badge{font-family:var(--ui);font-weight:600;font-size:12px;letter-spacing:.1em;text-transform:uppercase;padding:2px 8px;border-radius:20px;border:1px solid}
+h1.title{font-size:42px;font-weight:600;line-height:1.05;color:var(--paper);margin:4px 0 6px}
+.aka{font-style:italic;color:var(--smoke);margin-bottom:12px}
+.tools{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 18px}
+.review{border:1px dashed var(--brass-dim);border-radius:10px;padding:12px 14px;margin:0 0 18px;background:rgba(201,162,94,.06);
+  display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-family:var(--ui);font-size:15px}
+.review span{flex:1;min-width:200px;color:var(--smoke)}
+.cover{width:100%;max-height:420px;object-fit:cover;border-radius:10px;border:1px solid var(--line);margin-bottom:16px;display:block}
+table.fields{border-collapse:collapse;margin:0 0 18px;font-size:17px;width:100%}
+table.fields td{padding:5px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+table.fields td:first-child{font-family:var(--ui);font-weight:600;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--brass);width:34%;padding-top:8px}
+.body{line-height:1.55;font-size:19px}
+.body p{margin:0 0 .8em}
+.body h2,.body h3,.body h4{font-family:var(--ui);color:var(--brass);letter-spacing:.08em;margin:1.3em 0 .4em;font-weight:700}
+.body h2{font-size:17px;text-transform:uppercase;letter-spacing:.12em}
+.body h3{font-size:16px} .body h4{font-size:15px}
+.body ul,.body ol{margin:0 0 .8em 1.3em}
+.body li{margin:.15em 0}
+.body li.chk{list-style:none;margin-left:-1.2em}
+.body li.chk input{margin-right:7px;accent-color:var(--brass);transform:translateY(1px)}
+.body li.chk.done{color:var(--smoke);text-decoration:line-through}
+.body blockquote{border-left:3px solid var(--brass-dim);padding-left:12px;color:var(--smoke);margin:0 0 .8em;font-style:italic}
+.body hr{border:0;border-top:1px solid var(--line);margin:1.2em 0}
+.body code{font-family:var(--mono);font-size:.8em;background:var(--ink3);padding:1px 4px;border-radius:4px}
+a.wl{color:var(--glow);text-decoration:none;border-bottom:1px dotted rgba(91,224,200,.5);cursor:pointer}
+a.wl:hover{border-bottom-style:solid}
+a.wl.missing{color:var(--bad);border-bottom-color:rgba(224,112,91,.5)}
+.empty-body{color:var(--smoke);font-style:italic}
+section.sub{margin-top:30px}
+section.sub h3{font-family:var(--ui);font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:var(--smoke);margin-bottom:8px;
+  display:flex;align-items:center;gap:8px}
+section.sub h3 .btn{margin-left:auto}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--ink2);border:1px solid var(--line);border-radius:20px;padding:4px 10px;font-size:16px;color:var(--paper);text-decoration:none}
+.chip:hover{border-color:var(--brass-dim)}
+.chip .lbl{font-family:var(--ui);font-size:12px;letter-spacing:.06em;color:var(--smoke);text-transform:uppercase}
+.chip .x{color:var(--bad);font-family:var(--ui);margin-left:2px}
+.none{color:var(--smoke);font-size:15px;font-style:italic}
+
+/* edit */
+.form{display:flex;flex-direction:column;gap:12px}
+.form label{font-family:var(--ui);font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--brass);display:flex;flex-direction:column;gap:4px}
+.form .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form .inp,.form select{font-size:16px;padding:8px 10px;text-transform:none;letter-spacing:0;font-weight:500;color:var(--paper)}
+.form .ttl{font-family:var(--serif);font-size:30px;font-weight:600}
+textarea.inp{font-family:var(--serif);font-size:18px;line-height:1.5;min-height:340px;resize:vertical}
+.frow{display:flex;gap:6px;margin-bottom:6px}
+.frow .inp:first-child{width:36%}
+.frow .inp:nth-child(2){flex:1}
+.check{flex-direction:row!important;align-items:center;gap:8px!important;text-transform:none!important;letter-spacing:0!important;font-size:15px!important;color:var(--paper)!important}
+.hint{font-family:var(--ui);font-size:13px;color:var(--smoke);text-transform:none;letter-spacing:0;font-weight:500}
+.bodywrap{position:relative}
+.ac{position:absolute;left:8px;right:8px;top:100%;background:var(--ink2);border:1px solid var(--brass-dim);border-radius:8px;z-index:5;max-height:240px;overflow:auto}
+.ac button{display:flex;gap:8px;align-items:center;width:100%;text-align:left;padding:7px 10px;font-size:16px}
+.ac button:hover,.ac button:first-child{background:var(--ink3)}
+.formbar{display:flex;gap:8px;flex-wrap:wrap;position:sticky;bottom:0;padding:12px 0;background:linear-gradient(transparent,var(--ink) 30%)}
+
+/* home */
+.home h1{font-size:46px;font-weight:600;color:var(--paper);line-height:1.05}
+.home .lede{color:var(--smoke);font-size:20px;margin:8px 0 22px}
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:26px}
+.stat{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:rgba(19,30,25,.6);text-align:left}
+.stat:hover{border-color:var(--brass-dim)}
+.stat b{display:block;font-family:var(--ui);font-size:26px;color:var(--paper)}
+.stat span{font-family:var(--ui);font-size:12px;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+.progress{height:8px;background:var(--ink3);border-radius:8px;overflow:hidden;margin:8px 0 4px;display:flex}
+.progress i{display:block;height:100%}
+
+/* graph + map */
+.stage{position:absolute;inset:0;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+.toolbar{position:absolute;top:10px;left:10px;right:10px;display:flex;gap:6px;flex-wrap:wrap;z-index:5;pointer-events:none}
+.toolbar>*{pointer-events:auto}
+.toolbar .btn,.toolbar select{background:rgba(14,21,18,.9)}
+svg.graph{width:100%;height:100%;display:block;cursor:grab}
+svg.graph .gn{cursor:pointer}
+svg.graph .gn text{font-family:var(--ui);font-size:12px;fill:var(--paper);paint-order:stroke;stroke:var(--ink);stroke-width:3px;pointer-events:none}
+svg.graph.far .gn:not(.big):not(.sel) text{display:none}
+svg.graph .gn.dim{opacity:.18}
+svg.graph line{stroke:#4b5b53;stroke-width:1.2}
+svg.graph line.rel{stroke:var(--brass-dim);stroke-width:1.8}
+svg.graph line.men{stroke-dasharray:3 4;opacity:.55}
+svg.graph line.dim{opacity:.07}
+svg.graph line.hi{stroke:var(--glow);opacity:1}
+svg.graph text.el{font-family:var(--ui);font-size:10px;fill:var(--brass);paint-order:stroke;stroke:var(--ink);stroke-width:3px}
+.info{position:absolute;left:10px;right:10px;bottom:10px;max-width:460px;background:rgba(19,30,25,.96);border:1px solid var(--brass-dim);
+  border-radius:12px;padding:12px 14px;z-index:6;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.info h4{font-size:24px;font-weight:600;line-height:1.1;margin:4px 0}
+.info p{font-size:16px;color:var(--smoke);margin:4px 0 10px;max-height:5.4em;overflow:hidden}
+.info .row{display:flex;gap:6px;flex-wrap:wrap}
+.legend{position:absolute;right:10px;bottom:10px;font-family:var(--ui);font-size:12px;color:var(--smoke);background:rgba(14,21,18,.85);
+  border:1px solid var(--line);border-radius:8px;padding:6px 9px;z-index:4;display:flex;flex-direction:column;gap:2px}
+.legend span{display:flex;gap:6px;align-items:center}
+.mapstage{position:absolute;left:0;top:0;transform-origin:0 0}
+.mapstage img{display:block;pointer-events:none;-webkit-user-drag:none}
+.pin{position:absolute;width:0;height:0}
+.pin button{position:absolute;left:-13px;top:-30px;width:26px;height:30px;transform-origin:13px 30px}
+.pin svg{width:26px;height:30px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.7))}
+.pin .pl{position:absolute;left:14px;top:-26px;white-space:nowrap;font-family:var(--ui);font-weight:600;font-size:13px;
+  background:rgba(14,21,18,.85);padding:1px 6px;border-radius:5px;transform-origin:-14px 26px;pointer-events:none}
+.stage.placing{cursor:crosshair}
+.centered{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center}
+.centered .box{max-width:460px}
+.centered h2{font-size:32px;font-weight:600;margin-bottom:8px}
+.centered p{color:var(--smoke);margin-bottom:16px}
+
+/* timeline */
+.tl{position:relative;margin:20px 0 0 8px;padding-left:26px;border-left:2px solid var(--brass-dim)}
+.ev{position:relative;margin-bottom:22px}
+.ev:before{content:"";position:absolute;left:-34px;top:8px;width:12px;height:12px;border-radius:50%;background:var(--ink);border:2px solid var(--lamp)}
+.ev .when{font-family:var(--ui);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--lamp)}
+.ev a{font-size:24px;font-weight:600;color:var(--paper);text-decoration:none;display:block;line-height:1.15}
+.ev p{color:var(--smoke);font-size:16px;margin-top:2px}
+
+/* modal */
+.modal{position:fixed;inset:0;background:rgba(5,8,7,.7);display:flex;align-items:flex-start;justify-content:center;z-index:50;padding:8vh 14px 14px}
+.modal .box{width:100%;max-width:520px;background:var(--ink2);border:1px solid var(--brass-dim);border-radius:14px;padding:18px;max-height:84vh;overflow:auto;
+  box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.modal h2{font-size:28px;font-weight:600;margin-bottom:10px}
+.modal p{color:var(--smoke);font-size:16px;margin-bottom:10px}
+.modal .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.pick{max-height:46vh;overflow:auto;margin-top:8px;border:1px solid var(--line);border-radius:8px}
+.pick button{display:flex;gap:8px;align-items:center;width:100%;text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);font-size:17px}
+.pick button:hover{background:var(--ink3)}
+.typegrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.typegrid button{border:1px solid var(--line);border-radius:10px;padding:10px;text-align:left;display:flex;gap:8px;align-items:center;font-family:var(--ui);font-weight:600;font-size:16px}
+.typegrid button:hover{border-color:var(--brass-dim);background:var(--ink3)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink3);border:1px solid var(--brass-dim);padding:9px 16px;border-radius:9px;
+  font-family:var(--ui);font-size:15px;z-index:60;max-width:90vw}
+.mob-scrim{display:none}
+
+@media (max-width:820px){
+  :root{--hdr:52px}
+  .menubtn{display:block}
+  .logo small{display:none}
+  nav.views{position:fixed;bottom:0;left:0;right:0;margin:0;background:rgba(14,21,18,.97);border-top:1px solid var(--line);
+    justify-content:space-around;padding:6px 6px calc(6px + env(safe-area-inset-bottom));z-index:25}
+  nav.views a{flex:1;text-align:center;font-size:13px}
+  .app{height:calc(100% - var(--hdr) - 48px - env(safe-area-inset-bottom))}
+  aside{position:fixed;top:var(--hdr);bottom:0;left:0;width:86vw;max-width:330px;z-index:30;background:var(--ink2);transform:translateX(-102%);transition:transform .2s}
+  body.side-open aside{transform:none}
+  body.side-open .mob-scrim{display:block;position:fixed;inset:0;top:var(--hdr);background:rgba(0,0,0,.5);z-index:29}
+  .search{max-width:none}
+  .syncbtn .lbl{display:none}
+  article{padding:20px 16px 120px}
+  h1.title{font-size:34px}
+  .form .two{grid-template-columns:1fr}
+  .typegrid{grid-template-columns:1fr 1fr}
+  .legend{display:none}
+  .toast{bottom:76px}
+}
+</style>
+</head>
+<body>
+<header>
+  <button class="menubtn" id="menuBtn" aria-label="Cards">☰</button>
+  <a class="logo" href="#/">CODEX<small>2.0 · GENESIS</small></a>
+  <nav class="views" id="views">
+    <a href="#/" data-v="wiki">Wiki</a><a href="#/graph" data-v="graph">Graph</a><a href="#/map" data-v="map">Map</a><a href="#/timeline" data-v="timeline">Timeline</a>
+  </nav>
+  <div class="search"><input id="q" placeholder="Search the Codex…" autocomplete="off" spellcheck="false"><div class="results hidden" id="results"></div></div>
+  <button class="syncbtn" id="syncBtn" title="Sync settings"><span class="dot" id="syncDot"></span><span class="lbl" id="syncLbl">Local</span></button>
+</header>
+<div class="app">
+  <aside id="side">
+    <div class="side-top">
+      <button class="btn solid" id="newBtn">+ New card</button>
+      <div class="row">
+        <select id="fType"></select>
+        <select id="fStatus">
+          <option value="live">Not cut</option><option value="all">Everything</option><option value="draft">Draft</option>
+          <option value="canon">Canon</option><option value="v35">v35 · to review</option><option value="cut">Cut</option>
+        </select>
+      </div>
+    </div>
+    <div class="list" id="list"></div>
+  </aside>
+  <div class="mob-scrim" id="scrim"></div>
+  <main id="main"></main>
+</div>
+<input type="file" id="fileIn" class="hidden">
+
+<script>
+'use strict';
+/* ---------- config ---------- */
+const DB_NAME = 'codex2_v1', GH_KEY = 'codex2_gh', UI_KEY = 'codex2_ui';
+const WORLD_PATH = 'data/world.json', MEDIA_DIR = 'data/media/';
+const DEFAULT_GH = { owner: 'zjaylewis94', repo: 'codex', branch: 'main', token: '' };
+const TYPES = {
+  character: { label: 'Character', plural: 'Characters', color: '#ffca7a', icon: '◉', fields: ['Role', 'Faction', 'First appears'] },
+  location:  { label: 'Location',  plural: 'Locations',  color: '#5be0c8', icon: '⌖', fields: ['Region'] },
+  faction:   { label: 'Faction',   plural: 'Factions',   color: '#e0705b', icon: '⚑', fields: ['Leader', 'Goal'] },
+  item:      { label: 'Item',      plural: 'Items',      color: '#c9a25e', icon: '◆', fields: ['Used for'] },
+  lore:      { label: 'Lore',      plural: 'Lore',       color: '#a99bff', icon: '✦', fields: [] },
+  event:     { label: 'Event',     plural: 'Events',     color: '#f2e394', icon: '◷', fields: ['When', 'Order'] },
+  puzzle:    { label: 'Puzzle',    plural: 'Puzzles',    color: '#6fd08c', icon: '⧉', fields: ['Where', 'Needs', 'Solution', 'Reveals'] },
+  gameplay:  { label: 'Gameplay',  plural: 'Gameplay',   color: '#8fb4ff', icon: '⚙', fields: [] },
+  story:     { label: 'Story',     plural: 'Story',      color: '#e9a3c9', icon: '❦', fields: [] },
+  note:      { label: 'Note',      plural: 'Notes',      color: '#9aa59f', icon: '✎', fields: [] },
+};
+const STATUSES = {
+  draft: { label: 'Draft', color: '#c9a25e' }, canon: { label: 'Canon', color: '#6fd08c' },
+  v35: { label: 'v35 · review', color: '#8a7040' }, cut: { label: 'Cut', color: '#6c756f' },
+};
+const REL_LABELS = ['member of', 'leads', 'runs', 'sibling of', 'brother of', 'sister of', 'parent of', 'partner of', 'rival of', 'ally of',
+  'located in', 'owns', 'made by', 'unlocks', 'solved with', 'reveals', 'happened to', 'appears in', 'drives'];
+
+/* ---------- state ---------- */
+let W = null;                  // the world
+let meta = { baseSha: null, dirty: false, syncedMedia: [], lastSync: 0 };
+let gh = loadJSON(GH_KEY, DEFAULT_GH);
+let ui = loadJSON(UI_KEY, { fType: 'all', fStatus: 'live', showMentions: true, showV35: true, mapId: null });
+const media = {};              // id -> dataURL (in-memory cache of IndexedDB "media")
+let cache = {};                // derived indexes; cleared on every change
+let editing = null;            // { id, dirty } while a card form is open
+let syncState = 'local', syncMsg = '';
+
+const $ = s => document.querySelector(s);
+const main = $('#main');
+function loadJSON(k, d) { try { return Object.assign({}, d, JSON.parse(localStorage.getItem(k) || '{}')); } catch (e) { return Object.assign({}, d); } }
+function saveJSON(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const uid = p => (p || 'c') + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const typeOf = c => TYPES[c.type] || TYPES.note;
+function toast(msg, ms) {
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t);
+  setTimeout(() => t.remove(), ms || 2600);
+}
+
+/* ---------- IndexedDB ---------- */
+let dbp = null;
+function db() {
+  if (!dbp) dbp = new Promise((res, rej) => {
+    const r = indexedDB.open(DB_NAME, 1);
+    r.onupgradeneeded = () => { r.result.createObjectStore('kv'); r.result.createObjectStore('media'); };
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+  return dbp;
+}
+async function idb(store, mode, fn) {
+  const d = await db();
+  return new Promise((res, rej) => {
+    const tx = d.transaction(store, mode); const req = fn(tx.objectStore(store));
+    tx.oncomplete = () => res(req && req.result); tx.onerror = () => rej(tx.error);
+  });
+}
+const idbGet = (s, k) => idb(s, 'readonly', st => st.get(k));
+const idbPut = (s, k, v) => idb(s, 'readwrite', st => st.put(v, k));
+const idbDel = (s, k) => idb(s, 'readwrite', st => st.delete(k));
+const idbKeys = s => idb(s, 'readonly', st => st.getAllKeys());
+
+/* ---------- world ---------- */
+function blankWorld() { return { format: 'codex2', version: 1, updated: Date.now(), cards: [], relations: [], maps: [], canvas: {}, deleted: {} }; }
+function normalize(w) {
+  w = Object.assign(blankWorld(), w || {});
+  w.cards = (w.cards || []).map(c => Object.assign({ aliases: [], tags: [], fields: [], status: 'draft', parent: null, body: '', autolink: true, type: 'note', order: 0 }, c));
+  w.maps.forEach(m => { m.pins = m.pins || []; });
+  return w;
+}
+const card = id => (cache.byId || buildById())[id];
+function buildById() { cache.byId = {}; W.cards.forEach(c => { cache.byId[c.id] = c; }); return cache.byId; }
+let saveTimer = null, pushTimer = null;
+function changed(opts) {
+  cache = {};
+  W.updated = Date.now();
+  meta.dirty = true;
+  clearTimeout(saveTimer); saveTimer = setTimeout(saveLocal, 250);
+  if (gh.token && !(opts && opts.noPush)) { clearTimeout(pushTimer); pushTimer = setTimeout(() => sync(), 4000); }
+  setSync(gh.token ? 'dirty' : 'local');
+}
+async function saveLocal() {
+  try { await idbPut('kv', 'world', W); await idbPut('kv', 'meta', meta); }
+  catch (e) { try { localStorage.setItem('codex2_world_fallback', JSON.stringify(W)); } catch (e2) { toast('Could not save locally: ' + e.message, 5000); } }
+}
+function touch(c) { c.updated = Date.now(); }
+function getField(c, k) { const f = c.fields.find(f => f.k.toLowerCase() === k.toLowerCase()); return f ? f.v : ''; }
+
+/* ---------- linking ---------- */
+function nameIndex() {
+  if (cache.names) return cache.names;
+  const exact = {}, auto = [];
+  for (const c of W.cards) {
+    for (const n of [c.title, ...c.aliases]) {
+      if (!n) continue;
+      if (!exact[n.toLowerCase()]) exact[n.toLowerCase()] = c.id;
+      if (c.autolink && c.status !== 'cut' && n.length >= 3) auto.push([n, c.id]);
+    }
+  }
+  auto.sort((a, b) => b[0].length - a[0].length);
+  const map = {}; auto.forEach(([n, id]) => { if (!map[n]) map[n] = id; });
+  const re = auto.length ? new RegExp('(^|[^A-Za-z0-9_])(' + Object.keys(map).map(escRe).join('|') + ')(?![A-Za-z0-9_])', 'g') : null;
+  return (cache.names = { exact, map, re });
+}
+const resolve = name => nameIndex().exact[name.trim().toLowerCase()] || null;
+// Ids each card points at: explicit [[links]] plus auto-linked names.
+function mentionsOf(c) {
+  cache.mentions = cache.mentions || {};
+  if (cache.mentions[c.id]) return cache.mentions[c.id];
+  const out = new Set(), { re, map } = nameIndex();
+  c.body.replace(/\[\[([^\]|]+)(\|[^\]]*)?\]\]/g, (m, n) => { const id = resolve(n); if (id) out.add(id); return m; });
+  if (re) { re.lastIndex = 0; let m; const plain = c.body.replace(/\[\[[^\]]*\]\]/g, ' '); while ((m = re.exec(plain))) out.add(map[m[2]]); }
+  out.delete(c.id);
+  return (cache.mentions[c.id] = out);
+}
+function backlinks(id) { return W.cards.filter(c => c.id !== id && mentionsOf(c).has(id)); }
+function relationsOf(id) { return W.relations.filter(r => r.a === id || r.b === id); }
+
+/* ---------- markdown-lite ---------- */
+function inline(text, ctx) {
+  const parts = text.split(/(\[\[[^\]]+\]\])/);
+  let html = '';
+  for (const p of parts) {
+    const m = p.match(/^\[\[([^\]|]+)(?:\|([^\]]*))?\]\]$/);
+    if (m) {
+      const id = resolve(m[1]);
+      const label = esc(m[2] || m[1]);
+      html += id ? `<a class="wl" data-id="${esc(id)}">${label}</a>` : `<a class="wl missing" data-new="${esc(m[1].trim())}" title="Not written yet — tap to create">${label}</a>`;
+      continue;
+    }
+    html += autolink(p, ctx);
+  }
+  return html.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>').replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+    .replace(/`([^`\n]+)`/g, '<code>$1</code>');
+}
+function autolink(text, ctx) {
+  const { re, map } = nameIndex();
+  if (!re || !ctx) return esc(text);
+  let out = '', last = 0, m; re.lastIndex = 0;
+  while ((m = re.exec(text))) {
+    const name = m[2], id = map[name], start = m.index + m[1].length;
+    if (id === ctx.self || ctx.seen.has(id)) continue;   // link each card once per page
+    ctx.seen.add(id);
+    out += esc(text.slice(last, start)) + `<a class="wl" data-id="${esc(id)}">${esc(name)}</a>`;
+    last = start + name.length;
+  }
+  return out + esc(text.slice(last));
+}
+function renderBody(src, self) {
+  const ctx = { self, seen: new Set() };
+  const lines = src.split('\n');
+  let html = '', para = [], list = null;
+  const flushP = () => { if (para.length) { html += '<p>' + para.join('<br>') + '</p>'; para = []; } };
+  const flushL = () => { if (list) { html += `</${list}>`; list = null; } };
+  lines.forEach((raw, i) => {
+    const l = raw.trimEnd();
+    let m;
+    if (!l.trim()) { flushP(); flushL(); return; }
+    if ((m = l.match(/^(#{1,3})\s+(.*)$/))) { flushP(); flushL(); const n = m[1].length + 1; html += `<h${n}>${inline(m[2], ctx)}</h${n}>`; return; }
+    if (/^\s*(---+|═{3,}|─{3,})\s*$/.test(l)) { flushP(); flushL(); html += '<hr>'; return; }
+    if ((m = l.match(/^\s*[-*]\s+\[( |x|X)\]\s*(.*)$/))) {
+      flushP(); if (list !== 'ul') { flushL(); html += '<ul>'; list = 'ul'; }
+      const done = m[1] !== ' ';
+      html += `<li class="chk${done ? ' done' : ''}"><input type="checkbox" data-line="${i}"${done ? ' checked' : ''}>${inline(m[2], ctx)}</li>`; return;
+    }
+    if ((m = l.match(/^\s*[-*•]\s+(.*)$/))) { flushP(); if (list !== 'ul') { flushL(); html += '<ul>'; list = 'ul'; } html += `<li>${inline(m[1], ctx)}</li>`; return; }
+    if ((m = l.match(/^\s*\d+[.)]\s+(.*)$/))) { flushP(); if (list !== 'ol') { flushL(); html += '<ol>'; list = 'ol'; } html += `<li>${inline(m[1], ctx)}</li>`; return; }
+    if ((m = l.match(/^>\s?(.*)$/))) { flushP(); flushL(); html += `<blockquote>${inline(m[1], ctx)}</blockquote>`; return; }
+    flushL(); para.push(inline(l, ctx));
+  });
+  flushP(); flushL();
+  return html;
+}
+function excerpt(c, n) {
+  const t = c.body.replace(/\[\[([^\]|]+)(\|([^\]]*))?\]\]/g, (m, a, b, lbl) => lbl || a).replace(/^#+\s*/gm, '').replace(/[*`>]/g, '')
+    .replace(/^\s*-\s*\[.\]\s*/gm, '').replace(/^\s*-\s+/gm, '').replace(/\s+/g, ' ').trim();
+  return t.length > (n || 160) ? t.slice(0, n || 160).replace(/\s\S*$/, '') + '…' : t;
+}
+
+/* ---------- filters + sidebar ---------- */
+function passes(c, f) {
+  f = f || ui;
+  if (f.fType !== 'all' && c.type !== f.fType) return false;
+  if (f.fStatus === 'live') return c.status !== 'cut';
+  if (f.fStatus === 'all') return true;
+  return c.status === f.fStatus;
+}
+function initFilters() {
+  $('#fType').innerHTML = '<option value="all">All types</option>' + Object.entries(TYPES).map(([k, t]) => `<option value="${k}">${t.plural}</option>`).join('');
+  $('#fType').value = ui.fType; $('#fStatus').value = ui.fStatus;
+  $('#fType').onchange = e => { ui.fType = e.target.value; saveJSON(UI_KEY, ui); renderList(); if (view() === 'graph') render(); };
+  $('#fStatus').onchange = e => { ui.fStatus = e.target.value; saveJSON(UI_KEY, ui); renderList(); if (view() === 'graph') render(); };
+}
+function renderList() {
+  if (!W) { $('#list').innerHTML = ''; return; }
+  const cur = route().id;
+  const shown = W.cards.filter(c => passes(c));
+  const ids = new Set(shown.map(c => c.id));
+  let html = '';
+  for (const [k, t] of Object.entries(TYPES)) {
+    const inType = shown.filter(c => c.type === k);
+    if (!inType.length) continue;
+    html += `<div class="grp"><span class="pip" style="background:${t.color}"></span>${t.plural}<span class="n">${inType.length}</span></div>`;
+    const kids = {};
+    inType.forEach(c => { const p = c.parent && ids.has(c.parent) ? c.parent : ''; (kids[p] = kids[p] || []).push(c); });
+    const sortC = a => a.sort((x, y) => (x.order - y.order) || x.title.localeCompare(y.title));
+    const walk = (p, depth) => sortC(kids[p] || []).forEach(c => {
+      html += `<button class="item st-${c.status}${c.id === cur ? ' cur' : ''}" data-open="${esc(c.id)}" style="padding-left:${12 + depth * 14}px">` +
+        `<span class="pip" style="background:${typeOf(c).color};opacity:${c.status === 'v35' ? .45 : 1}"></span><span class="t">${esc(c.title)}</span>` +
+        (c.status === 'v35' ? '<span class="tag35">v35</span>' : '') + '</button>';
+      walk(c.id, depth + 1);
+    });
+    walk('', 0);
+  }
+  $('#list').innerHTML = html || '<div class="none" style="padding:14px">Nothing matches these filters.</div>';
+}
+
+/* ---------- routing ---------- */
+function route() {
+  const h = location.hash.replace(/^#\/?/, '').split('/');
+  return { v: h[0] || 'wiki', id: h[1] ? decodeURIComponent(h[1]) : null };
+}
+const view = () => { const v = route().v; return v === 'card' ? 'wiki' : v; };
+function go(hash) { if (location.hash === hash) render(); else location.hash = hash; }
+const openCard = id => go('#/card/' + encodeURIComponent(id));
+let lastHash = location.hash;
+window.addEventListener('hashchange', () => {
+  if (editing && editing.dirty && !confirm('Leave without saving your changes?')) { history.replaceState(null, '', lastHash || '#/'); return; }
+  if (editing && editing.id !== route().id) editing = null;
+  lastHash = location.hash; document.body.classList.remove('side-open'); render();
+});
+
+function render() {
+  lastHash = location.hash;
+  const r = route();
+  document.querySelectorAll('#views a').forEach(a => a.classList.toggle('on', a.dataset.v === view()));
+  renderList();
+  if (!W) return renderWelcome();
+  if (r.v === 'card' && r.id && card(r.id)) return editing && editing.id === r.id ? renderEdit(card(r.id)) : renderCard(card(r.id));
+  if (r.v === 'graph') return renderGraph();
+  if (r.v === 'map') return renderMap(r.id);
+  if (r.v === 'timeline') return renderTimeline();
+  renderHome();
+}
+
+/* ---------- welcome + home ---------- */
+function renderWelcome() {
+  main.innerHTML = `<div class="centered"><div class="box">
+    <h2>Codex 2.0</h2>
+    <p>The Project Genesis world lives in the private <b>codex</b> repo. Connect with your GitHub token to load it, or open a Codex file you exported.</p>
+    <div class="row" style="justify-content:center;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn solid" data-act="settings">Connect GitHub</button>
+      <button class="btn" data-act="import">Open a file</button>
+      <button class="btn" data-act="start-empty">Start empty</button>
+    </div></div></div>`;
+}
+function renderHome() {
+  const live = W.cards.filter(c => c.status !== 'cut');
+  const n = s => W.cards.filter(c => c.status === s).length;
+  const total = W.cards.length || 1;
+  const recent = W.cards.filter(c => c.status !== 'v35' || c.updated !== c.created).sort((a, b) => b.updated - a.updated).slice(0, 8);
+  main.innerHTML = `<article class="home">
+    <h1>Project Genesis</h1>
+    <p class="lede">${live.length} cards · ${W.relations.length} connections · ${W.maps.length} map${W.maps.length === 1 ? '' : 's'}</p>
+    <div class="stats">${Object.entries(TYPES).map(([k, t]) => {
+      const c = live.filter(x => x.type === k).length;
+      return `<button class="stat" data-ftype="${k}"><b>${c}</b><span style="color:${t.color}">${t.icon} ${t.plural}</span></button>`;
+    }).join('')}</div>
+    <section class="sub"><h3>Reviewing v35</h3>
+      <div class="progress">${['canon', 'draft', 'cut', 'v35'].map(s => `<i style="width:${n(s) / total * 100}%;background:${STATUSES[s].color}"></i>`).join('')}</div>
+      <p class="hint">${n('canon')} canon · ${n('draft')} draft · ${n('cut')} cut · <b>${n('v35')}</b> still to review</p>
+      ${n('v35') ? '<div class="tools"><button class="btn" data-act="review-next">Review the next v35 card</button></div>' : ''}
+    </section>
+    <section class="sub"><h3>Recently changed</h3><div class="chips">${recent.map(c => chip(c)).join('') || '<span class="none">Nothing yet.</span>'}</div></section>
+  </article>`;
+}
+function chip(c, extra) {
+  return `<a class="chip" data-id="${esc(c.id)}"><span class="pip" style="background:${typeOf(c).color}"></span>${extra || ''}${esc(c.title)}</a>`;
+}
+
+/* ---------- card page ---------- */
+function renderCard(c) {
+  const t = typeOf(c), st = STATUSES[c.status] || STATUSES.draft;
+  const crumbs = []; for (let p = card(c.parent); p && crumbs.length < 6; p = card(p.parent)) crumbs.unshift(p);
+  const kids = W.cards.filter(x => x.parent === c.id).sort((a, b) => (a.order - b.order) || a.title.localeCompare(b.title));
+  const rels = relationsOf(c.id);
+  const back = backlinks(c.id);
+  const pins = []; W.maps.forEach(m => m.pins.forEach(p => { if (p.card === c.id) pins.push(m); }));
+  const fields = c.fields.filter(f => f.k.trim() || f.v.trim());
+  main.innerHTML = `<article>
+    ${crumbs.length ? `<div class="crumbs">${crumbs.map(p => `<a class="wl" data-id="${esc(p.id)}">${esc(p.title)}</a>`).join(' › ')} ›</div>` : ''}
+    <div class="badges"><span class="badge" style="color:${t.color};border-color:${t.color}">${t.icon} ${t.label}</span>
+      <span class="badge" style="color:${st.color};border-color:${st.color}">${st.label}</span>
+      ${c.tags.map(g => `<span class="badge" style="color:var(--smoke);border-color:var(--line)">#${esc(g)}</span>`).join('')}</div>
+    <h1 class="title">${esc(c.title)}</h1>
+    ${c.aliases.length ? `<div class="aka">also: ${c.aliases.map(esc).join(', ')}</div>` : ''}
+    ${c.status === 'v35' ? `<div class="review"><span>From the original Codex. Does it still fit 2.0?</span>
+      <button class="btn small" data-status="draft">Keep as draft</button><button class="btn small" data-status="canon">Canon</button>
+      <button class="btn small danger" data-status="cut">Cut</button><button class="btn small" data-act="review-next">Skip ›</button></div>` : ''}
+    <div class="tools"><button class="btn" data-act="edit">Edit</button>
+      ${c.status !== 'v35' ? `<select data-act="set-status" class="inp">${Object.entries(STATUSES).map(([k, s]) => `<option value="${k}"${k === c.status ? ' selected' : ''}>${s.label}</option>`).join('')}</select>` : ''}
+      <button class="btn" data-act="graph-here">Show in graph</button></div>
+    ${c.img ? `<img class="cover" data-media="${esc(c.img)}" alt="">` : ''}
+    ${fields.length ? `<table class="fields">${fields.map(f => `<tr><td>${esc(f.k)}</td><td>${inline(f.v, null)}</td></tr>`).join('')}</table>` : ''}
+    <div class="body">${c.body.trim() ? renderBody(c.body, c.id) : '<p class="empty-body">Nothing written yet. Tap Edit to start.</p>'}</div>
+    ${kids.length ? `<section class="sub"><h3>Inside ${esc(c.title)}</h3><div class="chips">${kids.map(k => chip(k)).join('')}</div></section>` : ''}
+    <section class="sub"><h3>Connections <button class="btn small" data-act="add-rel">+ Connect</button></h3>
+      <div class="chips">${rels.map(r => {
+        const other = card(r.a === c.id ? r.b : r.a); if (!other) return '';
+        const lbl = r.a === c.id ? r.label : (r.label ? '← ' + r.label : '');
+        return `<span class="chip"><a class="wl" data-id="${esc(other.id)}" style="border:0;color:var(--paper)">${lbl ? `<span class="lbl">${esc(lbl)}</span> ` : ''}${esc(other.title)}</a><button class="x" data-delrel="${esc(r.id)}" title="Remove">×</button></span>`;
+      }).join('') || '<span class="none">No connections yet.</span>'}</div></section>
+    <section class="sub"><h3>Mentioned in</h3><div class="chips">${back.map(b => chip(b)).join('') || '<span class="none">No other card mentions this yet.</span>'}</div></section>
+    ${pins.length ? `<section class="sub"><h3>On the map</h3><div class="chips">${[...new Set(pins)].map(m => `<a class="chip" href="#/map/${encodeURIComponent(m.id)}">⌖ ${esc(m.name)}</a>`).join('')}</div></section>` : ''}
+    <p class="hint" style="margin-top:34px">${c.source ? 'Source: ' + esc(c.source) + ' · ' : ''}Last changed ${new Date(c.updated).toLocaleString()}</p>
+  </article>`;
+  main.scrollTop = 0;
+  hydrateMedia(main);
+}
+function setStatus(c, s) { c.status = s; touch(c); changed(); }
+function nextToReview(after) {
+  const i = W.cards.findIndex(c => c.id === after);
+  const ordered = [...W.cards.slice(i + 1), ...W.cards.slice(0, i + 1)];
+  return ordered.find(c => c.status === 'v35' && c.id !== after);
+}
+
+/* ---------- edit ---------- */
+function renderEdit(c) {
+  const sameType = W.cards.filter(x => x.type === c.type && x.id !== c.id).sort((a, b) => a.title.localeCompare(b.title));
+  main.innerHTML = `<article><form class="form" id="ed" autocomplete="off">
+    <label>Title<input class="inp ttl" name="title" value="${esc(c.title)}" required></label>
+    <div class="two">
+      <label>Type<select name="type">${Object.entries(TYPES).map(([k, t]) => `<option value="${k}"${k === c.type ? ' selected' : ''}>${t.label}</option>`).join('')}</select></label>
+      <label>Status<select name="status">${Object.entries(STATUSES).map(([k, s]) => `<option value="${k}"${k === c.status ? ' selected' : ''}>${s.label}</option>`).join('')}</select></label>
+    </div>
+    <div class="two">
+      <label>Also known as<input class="inp" name="aliases" value="${esc(c.aliases.join(', '))}" placeholder="Other names, comma-separated"></label>
+      <label>Tags<input class="inp" name="tags" value="${esc(c.tags.join(', '))}" placeholder="e.g. act 1, needs art"></label>
+    </div>
+    <div class="two">
+      <label>Inside<select name="parent"><option value="">(top level)</option>${sameType.map(x => `<option value="${esc(x.id)}"${x.id === c.parent ? ' selected' : ''}>${esc(x.title)}</option>`).join('')}</select></label>
+      <label class="check" style="align-self:end;padding-bottom:8px"><input type="checkbox" name="autolink"${c.autolink ? ' checked' : ''}> Link this name automatically in other cards</label>
+    </div>
+    <label>Details<span class="hint">Short facts shown as a table at the top.</span></label>
+    <div id="frows">${c.fields.map(f => frow(f.k, f.v)).join('')}</div>
+    <div><button type="button" class="btn small" data-act="add-field">+ Detail</button></div>
+    <label>Image<span class="hint">${c.img ? 'Replace or remove the card image.' : 'Optional. Resized on your device before saving.'}</span></label>
+    <div class="row" style="display:flex;gap:8px;flex-wrap:wrap">${c.img ? `<img data-media="${esc(c.img)}" style="height:70px;border-radius:6px">` : ''}
+      <button type="button" class="btn small" data-act="card-img">${c.img ? 'Replace' : 'Add image'}</button>
+      ${c.img ? '<button type="button" class="btn small danger" data-act="card-img-del">Remove</button>' : ''}</div>
+    <label>Writing<span class="hint">## heading · - list · - [ ] to-do · **bold** · *italic* · [[Card name]] links (type [[ for suggestions). Names of other cards link on their own.</span></label>
+    <div class="bodywrap"><textarea class="inp" name="body" spellcheck="true">${esc(c.body)}</textarea><div class="ac hidden" id="ac"></div></div>
+    <div class="formbar"><button class="btn solid" type="submit">Save</button><button type="button" class="btn" data-act="cancel-edit">Cancel</button>
+      <button type="button" class="btn danger" data-act="delete" style="margin-left:auto">Delete card</button></div>
+  </form></article>`;
+  hydrateMedia(main);
+  const f = $('#ed');
+  f.addEventListener('input', () => { editing.dirty = true; });
+  f.addEventListener('submit', e => { e.preventDefault(); saveEdit(c, f); });
+  const ta = f.elements.body;
+  ta.addEventListener('input', () => autocomplete(ta));
+  ta.addEventListener('keydown', e => {
+    const first = $('#ac:not(.hidden) button');
+    if (first && (e.key === 'Tab' || e.key === 'Enter')) { e.preventDefault(); first.click(); }
+    if (e.key === 'Escape') $('#ac').classList.add('hidden');
+  });
+}
+function frow(k, v) {
+  return `<div class="frow"><input class="inp" data-fk value="${esc(k)}" placeholder="Label"><input class="inp" data-fv value="${esc(v)}" placeholder="Value"><button type="button" class="btn small danger" data-act="del-field">×</button></div>`;
+}
+function saveEdit(c, f) {
+  const el = f.elements, title = el.title.value.trim();
+  if (!title) return;
+  const list = s => s.split(',').map(x => x.trim()).filter(Boolean);
+  Object.assign(c, {
+    title, type: el.type.value, status: el.status.value, aliases: list(el.aliases.value), tags: list(el.tags.value),
+    parent: el.parent.value || null, autolink: el.autolink.checked, body: el.body.value.replace(/\s+$/, ''),
+    fields: [...f.querySelectorAll('.frow')].map(r => ({ k: r.querySelector('[data-fk]').value.trim(), v: r.querySelector('[data-fv]').value.trim() })).filter(x => x.k || x.v),
+  });
+  touch(c); changed(); editing = null; toast('Saved'); render();
+}
+function autocomplete(ta) {
+  const ac = $('#ac');
+  const before = ta.value.slice(0, ta.selectionStart);
+  const m = before.match(/\[\[([^\]\n]{0,40})$/);
+  if (!m) { ac.classList.add('hidden'); return; }
+  const q = m[1].toLowerCase();
+  const hits = W.cards.filter(c => c.title.toLowerCase().includes(q) || c.aliases.some(a => a.toLowerCase().includes(q)))
+    .sort((a, b) => (a.status === 'cut') - (b.status === 'cut') || a.title.toLowerCase().indexOf(q) - b.title.toLowerCase().indexOf(q)).slice(0, 8);
+  if (!hits.length) { ac.classList.add('hidden'); return; }
+  ac.innerHTML = hits.map(c => `<button type="button" data-ins="${esc(c.title)}"><span class="pip" style="background:${typeOf(c).color}"></span>${esc(c.title)}</button>`).join('');
+  ac.classList.remove('hidden');
+  ac.onclick = e => {
+    const b = e.target.closest('[data-ins]'); if (!b) return;
+    const pos = ta.selectionStart, start = pos - m[1].length;
+    const afterTxt = ta.value.slice(pos).replace(/^[^\]\n]*\]\]/, '');
+    ta.value = ta.value.slice(0, start) + b.dataset.ins + ']]' + afterTxt;
+    const caret = start + b.dataset.ins.length + 2;
+    ta.setSelectionRange(caret, caret); ta.focus(); ac.classList.add('hidden'); editing.dirty = true;
+  };
+}
+function newCard(type, title) {
+  const t = TYPES[type] || TYPES.note;
+  const fields = (W.templates && W.templates[type]) || t.fields;
+  const c = { id: uid('c'), type, title: title || 'Untitled ' + t.label.toLowerCase(), aliases: [], tags: [], status: 'draft', parent: null, order: 0,
+    fields: fields.map(k => ({ k, v: '' })), body: '', autolink: true, created: Date.now(), updated: Date.now() };
+  W.cards.push(c); changed();
+  editing = { id: c.id, dirty: false };
+  openCard(c.id);
+  return c;
+}
+function deleteCard(c) {
+  if (!confirm(`Delete “${c.title}”? Its connections and map pins go too.`)) return;
+  const now = Date.now();
+  W.deleted[c.id] = now;
+  W.cards = W.cards.filter(x => x.id !== c.id);
+  W.relations = W.relations.filter(r => { const gone = r.a === c.id || r.b === c.id; if (gone) W.deleted[r.id] = now; return !gone; });
+  W.maps.forEach(m => { const n = m.pins.length; m.pins = m.pins.filter(p => p.card !== c.id); if (m.pins.length !== n) m.updated = now; });
+  W.cards.forEach(x => { if (x.parent === c.id) { x.parent = null; touch(x); } });
+  delete W.canvas[c.id];
+  editing = null; changed(); go('#/');
+}
+
+/* ---------- pickers ---------- */
+function modal(html) {
+  const m = document.createElement('div'); m.className = 'modal'; m.innerHTML = `<div class="box">${html}</div>`;
+  m.addEventListener('click', e => { if (e.target === m || e.target.closest('[data-close]')) m.remove(); });
+  document.body.appendChild(m); return m;
+}
+function pickCard(opts) {
+  const m = modal(`<h2>${esc(opts.title)}</h2>${opts.label ? `<input class="inp" id="pkLabel" list="relLabels" placeholder="How are they connected? e.g. member of" style="width:100%;margin-bottom:8px"><datalist id="relLabels">${REL_LABELS.map(l => `<option value="${l}">`).join('')}</datalist>` : ''}
+    <input class="inp" id="pkQ" placeholder="Find a card…" style="width:100%"><div class="pick" id="pkList"></div>
+    <div class="row"><button class="btn" data-close>Cancel</button></div>`);
+  const q = m.querySelector('#pkQ'), list = m.querySelector('#pkList');
+  const draw = () => {
+    const s = q.value.trim().toLowerCase();
+    const hits = W.cards.filter(c => c.id !== opts.exclude && c.status !== 'cut' && (!s || c.title.toLowerCase().includes(s) || c.aliases.some(a => a.toLowerCase().includes(s))))
+      .sort((a, b) => (a.status === 'v35') - (b.status === 'v35') || a.title.localeCompare(b.title)).slice(0, 60);
+    list.innerHTML = hits.map(c => `<button data-pk="${esc(c.id)}"><span class="pip" style="background:${typeOf(c).color}"></span>${esc(c.title)}<span class="hint" style="margin-left:auto">${typeOf(c).label}</span></button>`).join('') +
+      (s ? `<button data-pknew="${esc(q.value.trim())}">+ New card “${esc(q.value.trim())}”</button>` : '');
+  };
+  q.oninput = draw; draw(); setTimeout(() => (opts.label ? m.querySelector('#pkLabel') : q).focus(), 30);
+  list.onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const label = opts.label ? m.querySelector('#pkLabel').value.trim() : '';
+    let id = b.dataset.pk;
+    if (b.dataset.pknew) {
+      const c = { id: uid('c'), type: 'note', title: b.dataset.pknew, aliases: [], tags: [], status: 'draft', parent: null, order: 0, fields: [], body: '', autolink: true, created: Date.now(), updated: Date.now() };
+      W.cards.push(c); id = c.id; cache = {};
+    }
+    m.remove(); opts.onPick(id, label);
+  };
+}
+function pickType(title, onPick) {
+  const m = modal(`<h2>${esc(title)}</h2><div class="typegrid">${Object.entries(TYPES).map(([k, t]) => `<button data-t="${k}"><span style="color:${t.color}">${t.icon}</span>${t.label}</button>`).join('')}</div>
+    <div class="row"><button class="btn" data-close>Cancel</button></div>`);
+  m.querySelector('.typegrid').onclick = e => { const b = e.target.closest('[data-t]'); if (b) { m.remove(); onPick(b.dataset.t); } };
+}
+
+/* ---------- images ---------- */
+function chooseFile(accept) {
+  return new Promise(res => {
+    const inp = $('#fileIn'); inp.value = ''; inp.accept = accept;
+    inp.onchange = () => res(inp.files[0] || null); inp.click();
+  });
+}
+function shrinkImage(file, max) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      const cv = document.createElement('canvas'); cv.width = Math.round(img.naturalWidth * k); cv.height = Math.round(img.naturalHeight * k);
+      const g = cv.getContext('2d'); g.fillStyle = '#0e1512'; g.fillRect(0, 0, cv.width, cv.height); g.drawImage(img, 0, 0, cv.width, cv.height);
+      URL.revokeObjectURL(url); res({ data: cv.toDataURL('image/jpeg', 0.85), w: cv.width, h: cv.height });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('That file is not an image this browser can read.')); };
+    img.src = url;
+  });
+}
+async function storeMedia(data) { const id = uid('m'); media[id] = data; await idbPut('media', id, data); return id; }
+async function getMedia(id) {
+  if (media[id]) return media[id];
+  const d = await idbGet('media', id).catch(() => null);
+  if (d) media[id] = d;
+  return d;
+}
+function hydrateMedia(root) {
+  root.querySelectorAll('img[data-media]').forEach(async img => { const d = await getMedia(img.dataset.media); if (d) img.src = d; else img.alt = 'Image not synced to this device yet'; });
+}
+
+/* ---------- graph ---------- */
+let G = null; // graph view state
+function renderGraph() {
+  const focus = route().id;
+  const nodes = W.cards.filter(c => passes(c) && (ui.showV35 || c.status !== 'v35'));
+  const ids = new Set(nodes.map(c => c.id));
+  const edges = [];
+  W.relations.forEach(r => { if (ids.has(r.a) && ids.has(r.b)) edges.push({ a: r.a, b: r.b, kind: 'rel', label: r.label }); });
+  const relPairs = new Set(edges.map(e => [e.a, e.b].sort().join('|')));
+  nodes.forEach(c => mentionsOf(c).forEach(t => {
+    const k = [c.id, t].sort().join('|');
+    if (ids.has(t) && !relPairs.has(k)) { relPairs.add(k); edges.push({ a: c.id, b: t, kind: 'men' }); }
+  }));
+  const deg = {}; edges.forEach(e => { deg[e.a] = (deg[e.a] || 0) + 1; deg[e.b] = (deg[e.b] || 0) + 1; });
+  layoutGraph(nodes, edges);
+  main.innerHTML = `<div class="stage" id="gstage">
+    <div class="toolbar"><button class="btn small${ui.showMentions ? ' on' : ''}" data-act="tog-mentions">Mentions</button>
+      <button class="btn small${ui.showV35 ? ' on' : ''}" data-act="tog-v35">v35 cards</button>
+      <button class="btn small" data-act="relayout">Re-arrange</button><button class="btn small" data-act="fit">Fit</button>
+      <span class="hint" style="align-self:center;background:rgba(14,21,18,.8);padding:2px 6px;border-radius:5px">${nodes.length} cards · drag to move · tap to see links</span></div>
+    <svg class="graph" id="gsvg"><g id="gview">
+      <g>${edges.map((e, i) => `<line data-e="${i}" class="${e.kind}${e.kind === 'men' && !ui.showMentions ? ' hidden' : ''}"/>`).join('')}</g>
+      <g>${edges.map((e, i) => e.label ? `<text class="el" data-el="${i}" text-anchor="middle">${esc(e.label)}</text>` : '').join('')}</g>
+      <g>${nodes.map(c => { const r = 6 + Math.min(10, Math.sqrt(deg[c.id] || 0) * 2.2); return `<g class="gn${(deg[c.id] || 0) >= 4 ? ' big' : ''}" data-id="${esc(c.id)}">
+        <circle r="${r.toFixed(1)}" fill="${typeOf(c).color}" fill-opacity="${c.status === 'v35' ? .5 : .95}" stroke="#0e1512" stroke-width="2"/>
+        <text y="${(r + 13).toFixed(0)}" text-anchor="middle">${esc(c.title.length > 26 ? c.title.slice(0, 24) + '…' : c.title)}</text></g>`; }).join('')}</g>
+    </g></svg>
+    <div class="legend">${Object.entries(TYPES).filter(([k]) => nodes.some(c => c.type === k)).map(([k, t]) => `<span><span class="pip" style="background:${t.color}"></span>${t.plural}</span>`).join('')}
+      <span style="margin-top:4px">— connection · - - mention</span></div>
+    <div class="info hidden" id="ginfo"></div></div>`;
+  G = { nodes, edges, svg: $('#gsvg'), view: G && G.keep ? G.view : null, sel: null };
+  drawGraph();
+  if (!G.view) fitGraph();
+  bindGraph();
+  if (focus && ids.has(focus)) { selectNode(focus); centerOn(focus); }
+}
+function layoutGraph(nodes, edges, force) {
+  const pos = W.canvas, missing = nodes.filter(c => force || !pos[c.id]);
+  if (!missing.length) return;
+  const typeKeys = Object.keys(TYPES);
+  const hash = s => { let h = 7; for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) | 0; return h; };
+  const P = {};
+  nodes.forEach(c => {
+    if (!force && pos[c.id]) { P[c.id] = { x: pos[c.id].x, y: pos[c.id].y, fixed: true }; return; }
+    const a = typeKeys.indexOf(c.type) / typeKeys.length * Math.PI * 2, h = hash(c.id);
+    P[c.id] = { x: Math.cos(a) * 420 + (h % 140), y: Math.sin(a) * 420 + ((h >> 8) % 140), fixed: false };
+  });
+  const list = Object.values(P), E = edges.map(e => [P[e.a], P[e.b], e.kind === 'rel' ? .06 : .025]);
+  E.forEach(([p, q]) => { p.links = (p.links || 0) + 1; q.links = (q.links || 0) + 1; });
+  for (let it = 0; it < 260; it++) {
+    const temp = 18 * (1 - it / 260) + 1;
+    list.forEach(p => { p.dx = 0; p.dy = 0; });
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+      const p = list[i], q = list[j]; let dx = p.x - q.x, dy = p.y - q.y; let d2 = dx * dx + dy * dy || 1;
+      if (d2 > 250000) continue;
+      const f = 2600 / d2; p.dx += dx * f; p.dy += dy * f; q.dx -= dx * f; q.dy -= dy * f;
+    }
+    E.forEach(([p, q, k]) => { const dx = q.x - p.x, dy = q.y - p.y; p.dx += dx * k; p.dy += dy * k; q.dx -= dx * k; q.dy -= dy * k; });
+    list.forEach(p => {
+      if (p.fixed) return;
+      const g = p.links ? .006 : .03;   // pull loose cards in harder so they don't drift off the screen
+      p.dx -= p.x * g; p.dy -= p.y * g;
+      const l = Math.hypot(p.dx, p.dy) || 1, s = Math.min(l, temp) / l; p.x += p.dx * s; p.y += p.dy * s;
+    });
+  }
+  Object.entries(P).forEach(([id, p]) => { pos[id] = { x: Math.round(p.x), y: Math.round(p.y) }; });
+  saveLocal();
+}
+function drawGraph() {
+  const pos = W.canvas;
+  G.svg.querySelectorAll('.gn').forEach(g => { const p = pos[g.dataset.id]; g.setAttribute('transform', `translate(${p.x},${p.y})`); });
+  G.svg.querySelectorAll('line').forEach(l => {
+    const e = G.edges[l.dataset.e], a = pos[e.a], b = pos[e.b];
+    l.setAttribute('x1', a.x); l.setAttribute('y1', a.y); l.setAttribute('x2', b.x); l.setAttribute('y2', b.y);
+  });
+  G.svg.querySelectorAll('text.el').forEach(t => {
+    const e = G.edges[t.dataset.el], a = pos[e.a], b = pos[e.b];
+    t.setAttribute('x', (a.x + b.x) / 2); t.setAttribute('y', (a.y + b.y) / 2 - 3);
+  });
+  applyView();
+}
+function applyView() {
+  const v = G.view; if (!v) return;
+  $('#gview').setAttribute('transform', `translate(${v.x},${v.y}) scale(${v.k})`);
+  G.svg.classList.toggle('far', v.k < .75);
+  G.svg.querySelectorAll('text.el').forEach(t => t.classList.toggle('hidden', v.k < .9 && !t.classList.contains('hi')));
+}
+function fitGraph() {
+  const ps = G.nodes.map(c => W.canvas[c.id]);
+  if (!ps.length) { G.view = { x: 0, y: 0, k: 1 }; return applyView(); }
+  // Fit the middle 94% of cards so a few loose ones don't shrink everything.
+  const r = G.svg.getBoundingClientRect(), q = (a, f) => a[Math.min(a.length - 1, Math.floor(a.length * f))];
+  const xs = ps.map(p => p.x).sort((a, b) => a - b), ys = ps.map(p => p.y).sort((a, b) => a - b), cut = ps.length > 20 ? .03 : 0;
+  const minX = q(xs, cut) - 60, maxX = q(xs, 1 - cut - 1e-9) + 60, minY = q(ys, cut) - 60, maxY = q(ys, 1 - cut - 1e-9) + 60;
+  const k = Math.min(2, r.width / (maxX - minX), (r.height - 60) / (maxY - minY));
+  G.view = { k, x: r.width / 2 - (minX + maxX) / 2 * k, y: r.height / 2 + 20 - (minY + maxY) / 2 * k };
+  applyView();
+}
+function centerOn(id) {
+  const p = W.canvas[id], r = G.svg.getBoundingClientRect(); if (!p) return;
+  G.view.k = Math.max(G.view.k, 1.1); G.view.x = r.width / 2 - p.x * G.view.k; G.view.y = r.height / 2.4 - p.y * G.view.k; applyView();
+}
+function selectNode(id) {
+  G.sel = id;
+  const near = new Set([id]);
+  G.edges.forEach(e => { if (e.a === id) near.add(e.b); if (e.b === id) near.add(e.a); });
+  G.svg.querySelectorAll('.gn').forEach(g => { g.classList.toggle('dim', !!id && !near.has(g.dataset.id)); g.classList.toggle('sel', g.dataset.id === id); });
+  G.svg.querySelectorAll('line').forEach(l => { const e = G.edges[l.dataset.e]; const on = id && (e.a === id || e.b === id); l.classList.toggle('dim', !!id && !on); l.classList.toggle('hi', !!on); });
+  G.svg.querySelectorAll('text.el').forEach(t => { const e = G.edges[t.dataset.el]; t.classList.toggle('hi', !!id && (e.a === id || e.b === id)); });
+  applyView();
+  const info = $('#ginfo');
+  if (!id) { info.classList.add('hidden'); return; }
+  const c = card(id), t = typeOf(c);
+  info.innerHTML = `<span class="badge" style="color:${t.color};border-color:${t.color}">${t.icon} ${t.label}</span>
+    <h4>${esc(c.title)}</h4><p>${esc(excerpt(c, 220)) || '<i>Nothing written yet.</i>'}</p>
+    <div class="row"><button class="btn small solid" data-id="${esc(id)}">Open</button><button class="btn small" data-act="add-rel-graph">+ Connect</button><button class="btn small" data-act="unselect">Close</button></div>`;
+  info.classList.remove('hidden');
+}
+function bindGraph() {
+  const svg = G.svg, pts = new Map(); let drag = null, lastTap = { id: null, t: 0 };
+  const local = e => { const r = svg.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  svg.addEventListener('pointerdown', e => {
+    svg.setPointerCapture(e.pointerId); pts.set(e.pointerId, local(e));
+    if (pts.size === 2) { const [a, b] = [...pts.values()]; drag = { kind: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y), v0: { ...G.view }, m: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } }; return; }
+    const g = e.target.closest('.gn'), p = local(e);
+    drag = g ? { kind: 'node', id: g.dataset.id, p0: p, moved: false } : { kind: 'pan', p0: p, v0: { ...G.view }, moved: false };
+  });
+  svg.addEventListener('pointermove', e => {
+    if (!pts.has(e.pointerId) || !drag) return;
+    pts.set(e.pointerId, local(e)); const p = local(e);
+    if (drag.kind === 'pinch' && pts.size === 2) {
+      const [a, b] = [...pts.values()], k = Math.max(.15, Math.min(4, drag.v0.k * Math.hypot(a.x - b.x, a.y - b.y) / drag.d0));
+      G.view = { k, x: drag.m.x - (drag.m.x - drag.v0.x) * k / drag.v0.k, y: drag.m.y - (drag.m.y - drag.v0.y) * k / drag.v0.k }; applyView(); return;
+    }
+    if (drag.kind === 'pinch') return;
+    if (Math.hypot(p.x - drag.p0.x, p.y - drag.p0.y) > 4) drag.moved = true;
+    if (!drag.moved) return;
+    if (drag.kind === 'pan') { G.view.x = drag.v0.x + p.x - drag.p0.x; G.view.y = drag.v0.y + p.y - drag.p0.y; applyView(); }
+    if (drag.kind === 'node') { W.canvas[drag.id] = { x: Math.round((p.x - G.view.x) / G.view.k), y: Math.round((p.y - G.view.y) / G.view.k) }; drawGraph(); }
+  });
+  const end = e => {
+    pts.delete(e.pointerId);
+    const d = drag; if (!d) return;
+    if (d.kind === 'pinch') { if (!pts.size) drag = null; return; }
+    drag = null;
+    if (d.kind === 'node' && d.moved) changed();
+    if (d.kind === 'node' && !d.moved) {
+      const now = Date.now();
+      if (lastTap.id === d.id && now - lastTap.t < 350) return openCard(d.id);
+      lastTap = { id: d.id, t: now }; selectNode(d.id);
+    }
+    if (d.kind === 'pan' && !d.moved) selectNode(null);
+  };
+  svg.addEventListener('pointerup', end); svg.addEventListener('pointercancel', end);
+  svg.addEventListener('wheel', e => {
+    e.preventDefault(); const p = local(e), v = G.view, k = Math.max(.15, Math.min(4, v.k * Math.exp(-e.deltaY * .0015)));
+    G.view = { k, x: p.x - (p.x - v.x) * k / v.k, y: p.y - (p.y - v.y) * k / v.k }; applyView();
+  }, { passive: false });
+}
+
+/* ---------- maps ---------- */
+let M = null;
+function renderMap(mapId) {
+  const m = W.maps.find(x => x.id === (mapId || ui.mapId)) || W.maps[0];
+  if (!m) {
+    main.innerHTML = `<div class="centered"><div class="box"><h2>Maps</h2><p>Upload a map (a level, a district, anything) and drop pins that open cards. Images are resized on your device and synced to the private repo.</p>
+      <button class="btn solid" data-act="new-map">Upload a map</button></div></div>`;
+    return;
+  }
+  if (ui.mapId !== m.id) { ui.mapId = m.id; saveJSON(UI_KEY, ui); }
+  main.innerHTML = `<div class="stage" id="mstage"><div class="mapstage" id="mview"><img id="mimg" alt="">
+      ${m.pins.map(p => { const c = card(p.card); if (!c) return ''; return `<div class="pin" style="left:${p.x * 100}%;top:${p.y * 100}%" data-pin="${esc(p.id)}">
+        <button data-pinbtn="${esc(p.id)}" aria-label="${esc(c.title)}"><svg viewBox="0 0 26 30"><path d="M13 29s10-9.5 10-16.5A10 10 0 0 0 3 12.5C3 19.5 13 29 13 29z" fill="${typeOf(c).color}" stroke="#0e1512" stroke-width="2"/><circle cx="13" cy="12.5" r="3.6" fill="#0e1512"/></svg></button>
+        <span class="pl">${esc(c.title)}</span></div>`; }).join('')}</div>
+    <div class="toolbar"><select id="mapSel">${W.maps.map(x => `<option value="${esc(x.id)}"${x.id === m.id ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
+      <button class="btn small" data-act="pin-mode" id="pinMode">+ Pin</button><button class="btn small" data-act="fit-map">Fit</button>
+      <button class="btn small" data-act="new-map">New map</button><button class="btn small" data-act="map-menu">⋯</button></div>
+    <div class="info hidden" id="minfo"></div></div>`;
+  M = { map: m, placing: false, view: null, w: m.w || 1000, h: m.h || 700 };
+  $('#mapSel').onchange = e => go('#/map/' + encodeURIComponent(e.target.value));
+  getMedia(m.img).then(d => {
+    if (!d) { $('#mstage').insertAdjacentHTML('beforeend', '<div class="centered"><div class="box"><p>This map image hasn’t reached this device yet. Sync to fetch it.</p></div></div>'); return; }
+    const img = $('#mimg'); img.onload = () => { M.w = img.naturalWidth; M.h = img.naturalHeight; img.style.width = M.w + 'px'; img.style.height = M.h + 'px'; $('#mview').style.width = M.w + 'px'; $('#mview').style.height = M.h + 'px'; fitMap(); };
+    img.src = d;
+  });
+  bindMap();
+}
+function fitMap() {
+  const r = $('#mstage').getBoundingClientRect(), k = Math.min(r.width / M.w, (r.height - 50) / M.h);
+  M.view = { k, x: (r.width - M.w * k) / 2, y: 50 + (r.height - 50 - M.h * k) / 2 }; applyMap();
+}
+function applyMap() {
+  const v = M.view; if (!v) return;
+  $('#mview').style.transform = `translate(${v.x}px,${v.y}px) scale(${v.k})`;
+  document.querySelectorAll('.pin button').forEach(b => { b.style.transform = `scale(${1 / v.k})`; });
+  document.querySelectorAll('.pin .pl').forEach(l => { l.style.transform = `scale(${1 / v.k})`; l.classList.toggle('hidden', v.k * M.w < 500); });
+}
+function bindMap() {
+  const st = $('#mstage'), pts = new Map(); let drag = null;
+  const local = e => { const r = st.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  st.addEventListener('pointerdown', e => {
+    if (e.target.closest('.toolbar,.info')) return;
+    st.setPointerCapture(e.pointerId); pts.set(e.pointerId, local(e));
+    if (!M.view) return;
+    if (pts.size === 2) { const [a, b] = [...pts.values()]; drag = { kind: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y), v0: { ...M.view }, m: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } }; return; }
+    const pin = e.target.closest('[data-pinbtn]');
+    drag = { kind: 'pan', pin: pin && pin.dataset.pinbtn, p0: local(e), v0: { ...M.view }, moved: false };
+  });
+  st.addEventListener('pointermove', e => {
+    if (!pts.has(e.pointerId) || !drag) return;
+    pts.set(e.pointerId, local(e)); const p = local(e);
+    if (drag.kind === 'pinch' && pts.size === 2) {
+      const [a, b] = [...pts.values()], k = Math.max(.05, Math.min(8, drag.v0.k * Math.hypot(a.x - b.x, a.y - b.y) / drag.d0));
+      M.view = { k, x: drag.m.x - (drag.m.x - drag.v0.x) * k / drag.v0.k, y: drag.m.y - (drag.m.y - drag.v0.y) * k / drag.v0.k }; applyMap(); return;
+    }
+    if (drag.kind === 'pinch') return;
+    if (Math.hypot(p.x - drag.p0.x, p.y - drag.p0.y) > 5) drag.moved = true;
+    if (drag.moved) { M.view.x = drag.v0.x + p.x - drag.p0.x; M.view.y = drag.v0.y + p.y - drag.p0.y; applyMap(); }
+  });
+  const end = e => {
+    pts.delete(e.pointerId);
+    if (!drag || drag.kind === 'pinch') { if (!pts.size) drag = null; return; }
+    const d = drag; drag = null;
+    if (d.moved) return;
+    if (d.pin) return showPin(d.pin);
+    if (M.placing) {
+      const x = (d.p0.x - M.view.x) / M.view.k / M.w, y = (d.p0.y - M.view.y) / M.view.k / M.h;
+      if (x < 0 || y < 0 || x > 1 || y > 1) return;
+      setPlacing(false);
+      pickCard({ title: 'What goes here?', onPick: id => { M.map.pins.push({ id: uid('p'), x: +x.toFixed(4), y: +y.toFixed(4), card: id }); M.map.updated = Date.now(); changed(); render(); } });
+    } else $('#minfo').classList.add('hidden');
+  };
+  st.addEventListener('pointerup', end); st.addEventListener('pointercancel', end);
+  st.addEventListener('wheel', e => {
+    if (!M.view) return; e.preventDefault();
+    const p = local(e), v = M.view, k = Math.max(.05, Math.min(8, v.k * Math.exp(-e.deltaY * .0015)));
+    M.view = { k, x: p.x - (p.x - v.x) * k / v.k, y: p.y - (p.y - v.y) * k / v.k }; applyMap();
+  }, { passive: false });
+}
+function setPlacing(on) { M.placing = on; $('#mstage').classList.toggle('placing', on); $('#pinMode').classList.toggle('on', on); $('#pinMode').textContent = on ? 'Tap the map…' : '+ Pin'; }
+function showPin(pid) {
+  const p = M.map.pins.find(x => x.id === pid), c = p && card(p.card); if (!c) return;
+  const t = typeOf(c), info = $('#minfo');
+  info.innerHTML = `<span class="badge" style="color:${t.color};border-color:${t.color}">${t.icon} ${t.label}</span><h4>${esc(c.title)}</h4>
+    <p>${esc(excerpt(c, 200)) || '<i>Nothing written yet.</i>'}</p>
+    <div class="row"><button class="btn small solid" data-id="${esc(c.id)}">Open</button><button class="btn small danger" data-delpin="${esc(pid)}">Remove pin</button></div>`;
+  info.classList.remove('hidden');
+}
+async function newMap() {
+  const f = await chooseFile('image/*'); if (!f) return;
+  const name = prompt('Name this map', f.name.replace(/\.[^.]+$/, '')) || 'Map';
+  try {
+    toast('Resizing…');
+    const img = await shrinkImage(f, 2400);
+    const id = await storeMedia(img.data);
+    const m = { id: uid('map'), name, img: id, w: img.w, h: img.h, pins: [], updated: Date.now() };
+    W.maps.push(m); changed(); go('#/map/' + encodeURIComponent(m.id));
+  } catch (e) { toast(e.message, 4000); }
+}
+
+/* ---------- timeline ---------- */
+function renderTimeline() {
+  const evs = W.cards.filter(c => c.type === 'event' && passes(c, { fType: 'all', fStatus: ui.fStatus }))
+    .sort((a, b) => (parseFloat(getField(a, 'Order')) || 0) - (parseFloat(getField(b, 'Order')) || 0) || a.title.localeCompare(b.title));
+  main.innerHTML = `<article><h1 class="title">Timeline</h1>
+    <p class="hint">Event cards in order. Set an event’s <b>Order</b> detail (a number) to place it, and <b>When</b> for the label.</p>
+    <div class="tools"><button class="btn" data-act="new-event">+ Event</button></div>
+    ${evs.length ? `<div class="tl">${evs.map(c => `<div class="ev"><div class="when">${esc(getField(c, 'When') || 'Undated')}</div>
+      <a class="wl" data-id="${esc(c.id)}" style="border:0">${esc(c.title)}</a><p>${esc(excerpt(c, 180))}</p></div>`).join('')}</div>` : '<p class="none">No events yet.</p>'}
+  </article>`;
+}
+
+/* ---------- search ---------- */
+function search(q) {
+  q = q.trim().toLowerCase(); if (!q) return [];
+  const score = c => {
+    const t = c.title.toLowerCase();
+    if (t === q) return 100; if (t.startsWith(q)) return 80; if (c.aliases.some(a => a.toLowerCase().startsWith(q))) return 70;
+    if (t.includes(q)) return 60; if (c.tags.some(g => g.toLowerCase().includes(q))) return 40;
+    if (c.body.toLowerCase().includes(q)) return 20; return 0;
+  };
+  return W.cards.map(c => [score(c) - (c.status === 'cut' ? 15 : 0), c]).filter(x => x[0] > 0).sort((a, b) => b[0] - a[0]).slice(0, 14).map(x => x[1]);
+}
+function snippet(c, q) {
+  const i = c.body.toLowerCase().indexOf(q.toLowerCase());
+  if (i < 0) return excerpt(c, 90);
+  return (i > 30 ? '…' : '') + c.body.slice(Math.max(0, i - 30), i + 70).replace(/\s+/g, ' ');
+}
+function bindSearch() {
+  const q = $('#q'), res = $('#results');
+  q.addEventListener('input', () => {
+    if (!W) return;
+    const hits = search(q.value);
+    res.innerHTML = hits.map((c, i) => `<button data-id="${esc(c.id)}" class="${i ? '' : 'sel'}"><span class="pip" style="background:${typeOf(c).color}"></span>
+      <span style="flex:none">${esc(c.title)}</span><span class="snip">${esc(snippet(c, q.value))}</span></button>`).join('') ||
+      (q.value.trim() ? `<button data-newtitle="${esc(q.value.trim())}">+ New card “${esc(q.value.trim())}”</button>` : '');
+    res.classList.toggle('hidden', !q.value.trim());
+  });
+  q.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { const b = res.querySelector('button'); if (b) b.click(); }
+    if (e.key === 'Escape') { q.value = ''; res.classList.add('hidden'); q.blur(); }
+  });
+  q.addEventListener('blur', () => setTimeout(() => res.classList.add('hidden'), 200));
+  res.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    q.value = ''; res.classList.add('hidden');
+    if (b.dataset.newtitle) pickType('New card: ' + b.dataset.newtitle, t => newCard(t, b.dataset.newtitle));
+  });
+  document.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); q.focus(); q.select(); } });
+}
+
+/* ---------- GitHub sync ---------- */
+function setSync(s, msg) {
+  syncState = s; syncMsg = msg || '';
+  $('#syncDot').className = 'dot ' + ({ ok: 'ok', dirty: 'dirty', err: 'err', busy: 'busy' }[s] || '');
+  $('#syncLbl').textContent = { local: 'Local only', ok: 'Synced', dirty: 'Unsynced', err: 'Sync error', busy: 'Syncing…' }[s] || s;
+  $('#syncBtn').title = msg || 'Sync settings';
+}
+function b64encode(str) {
+  const bytes = new TextEncoder().encode(str); let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+function b64decode(b64) { const bin = atob(b64.replace(/\s/g, '')); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new TextDecoder().decode(u); }
+function api(path, opts) {
+  opts = opts || {};
+  const url = `https://api.github.com/repos/${encodeURIComponent(gh.owner)}/${encodeURIComponent(gh.repo)}/contents/${path}` + (opts.method ? '' : `?ref=${encodeURIComponent(gh.branch)}`);
+  return fetch(url, { method: opts.method || 'GET', cache: 'no-store', body: opts.body,
+    headers: { Authorization: 'Bearer ' + gh.token, Accept: opts.raw ? 'application/vnd.github.raw+json' : 'application/vnd.github+json', 'Content-Type': 'application/json' } });
+}
+async function readRemote() {
+  const r = await api(WORLD_PATH);
+  if (r.status === 404) return { world: null, sha: null };
+  if (!r.ok) throw new Error(await ghError(r));
+  const j = await r.json();
+  let text;
+  if (j.content && j.encoding === 'base64') text = b64decode(j.content);
+  else { const raw = await api(WORLD_PATH, { raw: true }); if (!raw.ok) throw new Error(await ghError(raw)); text = await raw.text(); }
+  return { world: normalize(JSON.parse(text)), sha: j.sha };
+}
+async function ghError(r) {
+  let m = ''; try { m = (await r.json()).message || ''; } catch (e) {}
+  if (r.status === 401) return 'GitHub rejected the token (401). Make a new one in Settings.';
+  if (r.status === 403) return 'The token can’t write to ' + gh.repo + ' (403). It needs Contents: read and write on that repo.';
+  if (r.status === 404) return 'Repo or branch not found (404). Check the token can see the private repo.';
+  return `GitHub ${r.status}: ${m}`;
+}
+// Newest edit wins per card / connection / map; deletions are kept as tombstones.
+function merge(a, b) {
+  const out = blankWorld();
+  for (const src of [a.deleted || {}, b.deleted || {}]) for (const k in src) out.deleted[k] = Math.max(out.deleted[k] || 0, src[k]);
+  const pick = (xs, ys) => {
+    const m = {};
+    [...xs, ...ys].forEach(x => { if (!m[x.id] || (x.updated || 0) > (m[x.id].updated || 0)) m[x.id] = x; });
+    return Object.values(m).filter(x => !(out.deleted[x.id] >= (x.updated || 0)));
+  };
+  out.cards = pick(a.cards, b.cards); out.relations = pick(a.relations, b.relations); out.maps = pick(a.maps, b.maps);
+  out.canvas = Object.assign({}, b.canvas, a.canvas);
+  out.templates = Object.assign({}, b.templates, a.templates);
+  out.updated = Math.max(a.updated || 0, b.updated || 0);
+  return out;
+}
+let syncing = null;
+function sync(opts) { if (!syncing) syncing = doSync(opts || {}).finally(() => { syncing = null; }); return syncing; }
+async function doSync(opts) {
+  if (!gh.token) { setSync('local'); return; }
+  clearTimeout(pushTimer);
+  setSync('busy');
+  try {
+    let remote = await readRemote();
+    let next = W;
+    const remoteChanged = remote.sha && remote.sha !== meta.baseSha;
+    if (!W) next = remote.world || blankWorld();
+    else if (remoteChanged && remote.world) next = merge(W, remote.world);
+    const needPush = !remote.world || meta.dirty || (remoteChanged && JSON.stringify(next) !== JSON.stringify(remote.world));
+    const wasEditing = !!editing;
+    W = normalize(next); cache = {};
+    await pushMedia();
+    if (needPush) {
+      const body = JSON.stringify({ message: 'Codex: update world', content: b64encode(JSON.stringify(W, null, 1) + '\n'), branch: gh.branch, ...(remote.sha ? { sha: remote.sha } : {}) });
+      const r = await api(WORLD_PATH, { method: 'PUT', body });
+      if (r.status === 409 || r.status === 422) { if (!opts.retried) { syncing = null; return doSync({ retried: true }); } }
+      if (!r.ok) throw new Error(await ghError(r));
+      meta.baseSha = (await r.json()).content.sha;
+    } else meta.baseSha = remote.sha;
+    meta.dirty = false; meta.lastSync = Date.now();
+    await saveLocal();
+    await pullMedia();
+    setSync('ok', 'Synced ' + new Date().toLocaleTimeString());
+    if (!wasEditing && (remoteChanged || opts.render)) render();
+  } catch (e) {
+    setSync('err', e.message);
+    if (opts.loud) toast(e.message, 6000);
+  }
+}
+function mediaIds() { const s = new Set(); W.cards.forEach(c => c.img && s.add(c.img)); W.maps.forEach(m => m.img && s.add(m.img)); return [...s]; }
+async function pushMedia() {
+  const done = new Set(meta.syncedMedia);
+  for (const id of mediaIds()) {
+    if (done.has(id)) continue;
+    const d = await getMedia(id); if (!d) continue;
+    const r = await api(MEDIA_DIR + id + '.jpg', { method: 'PUT', body: JSON.stringify({ message: 'Codex: add image', content: d.split(',')[1], branch: gh.branch }) });
+    if (r.ok || r.status === 422) { done.add(id); meta.syncedMedia = [...done]; }
+    else throw new Error(await ghError(r));
+  }
+}
+async function pullMedia() {
+  const have = new Set(await idbKeys('media').catch(() => []));
+  for (const id of mediaIds()) {
+    if (have.has(id)) continue;
+    const r = await api(MEDIA_DIR + id + '.jpg', { raw: true }); if (!r.ok) continue;
+    const blob = await r.blob();
+    const d = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(new Blob([blob], { type: 'image/jpeg' })); });
+    media[id] = d; await idbPut('media', id, d);
+    if (!meta.syncedMedia.includes(id)) meta.syncedMedia.push(id);
+  }
+}
+
+/* ---------- settings, import, export ---------- */
+function openSettings() {
+  const m = modal(`<h2>Sync &amp; backup</h2>
+    <p>Your Codex is saved on this device. To share it between your phone and computer, it syncs to <b>${esc(gh.owner)}/${esc(gh.repo)}</b> (private), file <code>${WORLD_PATH}</code>.</p>
+    <p class="hint">Use a fine-grained GitHub token with <b>Contents: Read and write</b> on the <b>codex</b> repo. It stays in this browser only.</p>
+    <form class="form" id="ghf">
+      <label>GitHub token<input class="inp" name="token" type="password" value="${esc(gh.token)}" placeholder="github_pat_…" autocomplete="off"></label>
+      <div class="two"><label>Repo (owner/name)<input class="inp" name="repo" value="${esc(gh.owner + '/' + gh.repo)}"></label>
+      <label>Branch<input class="inp" name="branch" value="${esc(gh.branch)}"></label></div>
+      <div class="row"><button class="btn solid" type="submit">Save &amp; sync</button>${gh.token ? '<button class="btn" type="button" data-act="disconnect">Forget token</button>' : ''}</div>
+    </form>
+    <p class="hint" style="margin-top:10px">${esc(syncMsg || '')}${meta.lastSync ? ' · last sync ' + new Date(meta.lastSync).toLocaleString() : ''}</p>
+    <h2 style="font-size:22px;margin-top:18px">Backup</h2>
+    <div class="row"><button class="btn" data-act="export">Download a backup</button><button class="btn" data-act="import">Open a backup</button></div>
+    <div class="row"><button class="btn" data-close>Close</button></div>`);
+  m.querySelector('#ghf').onsubmit = async e => {
+    e.preventDefault(); const el = e.target.elements; const [owner, repo] = el.repo.value.trim().split('/');
+    gh = { token: el.token.value.trim(), owner: owner || DEFAULT_GH.owner, repo: repo || DEFAULT_GH.repo, branch: el.branch.value.trim() || 'main' };
+    saveJSON(GH_KEY, gh); m.remove(); meta.baseSha = null;
+    await sync({ loud: true, render: true });
+  };
+  m.addEventListener('click', e => {
+    if (e.target.dataset.act === 'disconnect') { gh.token = ''; saveJSON(GH_KEY, gh); m.remove(); setSync('local'); toast('Token removed from this browser'); }
+  });
+}
+async function exportWorld() {
+  const bundle = { ...W, media: {} };
+  for (const id of mediaIds()) { const d = await getMedia(id); if (d) bundle.media[id] = d; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(bundle)], { type: 'application/json' }));
+  a.download = `codex2_backup_${new Date().toISOString().slice(0, 10)}.json`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+async function importWorld() {
+  const f = await chooseFile('application/json,.json'); if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); } catch (e) { return toast('That file isn’t valid JSON.', 4000); }
+  if (data.format !== 'codex2' || !Array.isArray(data.cards)) return toast('That file isn’t a Codex 2.0 world.', 4000);
+  for (const [id, d] of Object.entries(data.media || {})) { media[id] = d; await idbPut('media', id, d); }
+  delete data.media;
+  const incoming = normalize(data);
+  if (W && W.cards.length && !confirm(`Merge ${incoming.cards.length} cards from this file into your Codex? Where both have the same card, the newer edit wins.`)) return;
+  W = W ? normalize(merge(W, incoming)) : incoming;
+  document.querySelector('.modal')?.remove();
+  changed(); toast('Imported ' + incoming.cards.length + ' cards'); go('#/');
+}
+
+/* ---------- global clicks ---------- */
+document.addEventListener('click', async e => {
+  const t = e.target;
+  const cb = t.closest('.body input[type=checkbox][data-line]');
+  if (cb) {
+    const c = card(route().id); if (!c) return;
+    const lines = c.body.split('\n'), i = +cb.dataset.line;
+    lines[i] = lines[i].replace(/\[( |x|X)\]/, cb.checked ? '[x]' : '[ ]');
+    c.body = lines.join('\n'); touch(c); changed();
+    cb.closest('li').classList.toggle('done', cb.checked);
+    return;
+  }
+  const idEl = t.closest('[data-id]:not(.gn)');
+  if (idEl && !t.closest('.results') && !t.closest('svg')) { e.preventDefault(); return openCard(idEl.dataset.id); }
+  if (t.closest('.results [data-id]')) { return openCard(t.closest('[data-id]').dataset.id); }
+  const nw = t.closest('[data-new]');
+  if (nw) return pickType('New card: ' + nw.dataset.new, ty => newCard(ty, nw.dataset.new));
+  const open = t.closest('[data-open]');
+  if (open) return openCard(open.dataset.open);
+  const ft = t.closest('[data-ftype]');
+  if (ft) { ui.fType = ft.dataset.ftype; $('#fType').value = ui.fType; saveJSON(UI_KEY, ui); renderList(); document.body.classList.add('side-open'); return; }
+  const stb = t.closest('[data-status]');
+  if (stb) { const c = card(route().id); setStatus(c, stb.dataset.status); toast(STATUSES[stb.dataset.status].label + ': ' + c.title); const n = nextToReview(c.id); return n ? openCard(n.id) : render(); }
+  const dr = t.closest('[data-delrel]');
+  if (dr) { W.deleted[dr.dataset.delrel] = Date.now(); W.relations = W.relations.filter(r => r.id !== dr.dataset.delrel); changed(); return render(); }
+  const dp = t.closest('[data-delpin]');
+  if (dp) { M.map.pins = M.map.pins.filter(p => p.id !== dp.dataset.delpin); M.map.updated = Date.now(); changed(); return render(); }
+  const act = t.closest('[data-act]'); if (!act || act.tagName === 'SELECT') return;
+  const c = W && route().id ? card(route().id) : null;
+  switch (act.dataset.act) {
+    case 'settings': return openSettings();
+    case 'import': return importWorld();
+    case 'export': return exportWorld();
+    case 'start-empty': W = blankWorld(); changed(); return render();
+    case 'edit': editing = { id: c.id, dirty: false }; return render();
+    case 'cancel-edit': if (editing && editing.dirty && !confirm('Throw away your changes?')) return; editing = null; return render();
+    case 'delete': return deleteCard(c);
+    case 'add-field': $('#frows').insertAdjacentHTML('beforeend', frow('', '')); editing.dirty = true; return;
+    case 'del-field': act.closest('.frow').remove(); editing.dirty = true; return;
+    case 'card-img': {
+      const f = await chooseFile('image/*'); if (!f) return;
+      try { const img = await shrinkImage(f, 1400); saveEditDraft(c); c.img = await storeMedia(img.data); touch(c); changed(); render(); } catch (err) { toast(err.message, 4000); }
+      return;
+    }
+    case 'card-img-del': saveEditDraft(c); c.img = null; touch(c); changed(); return render();
+    case 'add-rel': return pickCard({ title: 'Connect ' + c.title + ' to…', label: true, exclude: c.id, onPick: (id, label) => addRel(c.id, id, label) });
+    case 'add-rel-graph': { const s = G.sel; return pickCard({ title: 'Connect ' + card(s).title + ' to…', label: true, exclude: s, onPick: (id, label) => { G.keep = true; addRel(s, id, label); } }); }
+    case 'unselect': return selectNode(null);
+    case 'graph-here': return go('#/graph/' + encodeURIComponent(c.id));
+    case 'review-next': { const n = nextToReview(c && c.id); return n ? openCard(n.id) : toast('Nothing left to review'); }
+    case 'tog-mentions': ui.showMentions = !ui.showMentions; saveJSON(UI_KEY, ui); G.keep = true; return render();
+    case 'tog-v35': ui.showV35 = !ui.showV35; saveJSON(UI_KEY, ui); G.keep = false; return render();
+    case 'relayout': layoutGraph(G.nodes, G.edges, true); changed(); G.keep = false; return render();
+    case 'fit': return fitGraph();
+    case 'new-map': return newMap();
+    case 'fit-map': return fitMap();
+    case 'pin-mode': return setPlacing(!M.placing);
+    case 'map-menu': {
+      const m = M.map;
+      const choice = prompt(`Rename “${m.name}”, or type DELETE to remove this map (its pins go too).`, m.name);
+      if (choice === null) return;
+      if (choice.trim() === 'DELETE') { W.deleted[m.id] = Date.now(); W.maps = W.maps.filter(x => x.id !== m.id); ui.mapId = null; changed(); return go('#/map'); }
+      if (choice.trim()) { m.name = choice.trim(); m.updated = Date.now(); changed(); render(); }
+      return;
+    }
+    case 'new-event': return newCard('event');
+  }
+});
+// Keep unsaved form text when an image action re-renders the edit form.
+function saveEditDraft(c) {
+  const f = $('#ed'); if (!f) return;
+  const el = f.elements;
+  c.title = el.title.value.trim() || c.title; c.body = el.body.value; c.aliases = el.aliases.value.split(',').map(x => x.trim()).filter(Boolean);
+}
+function addRel(a, b, label) {
+  W.relations.push({ id: uid('r'), a, b, label: label || '', updated: Date.now() });
+  changed(); toast('Connected'); render();
+}
+document.addEventListener('change', e => {
+  if (e.target.matches('select[data-act="set-status"]')) { const c = card(route().id); setStatus(c, e.target.value); render(); }
+});
+
+/* ---------- boot ---------- */
+$('#menuBtn').onclick = () => document.body.classList.toggle('side-open');
+$('#scrim').onclick = () => document.body.classList.remove('side-open');
+$('#newBtn').onclick = () => { if (!W) return; document.body.classList.remove('side-open'); pickType('New card', t => newCard(t)); };
+$('#syncBtn').onclick = openSettings;
+document.addEventListener('visibilitychange', () => { if (document.hidden && meta.dirty && gh.token) sync(); });
+window.addEventListener('beforeunload', e => { if (editing && editing.dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+(async function boot() {
+  initFilters(); bindSearch();
+  try {
+    W = await idbGet('kv', 'world'); const m = await idbGet('kv', 'meta'); if (m) meta = Object.assign(meta, m);
+  } catch (e) {
+    try { W = JSON.parse(localStorage.getItem('codex2_world_fallback') || 'null'); } catch (e2) {}
+  }
+  W = W ? normalize(W) : null;
+  setSync(gh.token ? (meta.dirty ? 'dirty' : 'ok') : 'local');
+  render();
+  if (gh.token) sync({ render: !W });
+})();
+</script>
+</body>
+</html>
