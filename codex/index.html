@@ -2121,10 +2121,19 @@ async function open3D() {
   // Haze (vvd look): colours fade to the horizon colour between fog.x and fog.y from the eye; fog.y = 0 turns it off.
   const FOG = `uniform vec3 eye;uniform vec2 fog;uniform vec3 fogc;varying vec3 wp;
     vec3 haze(vec3 c){return fog.y>0.?mix(c,fogc,smoothstep(fog.x,fog.y,distance(wp,eye))):c;}`;
+  // Painted texture (vvd look): soft blotches of light and dark with a warm tint in the light patches, and a fine
+  // brushed grain on top, so flat paint reads like painted grass. Noise needs highp: phones' mediump is too coarse.
+  const NOISE = `float hs(vec2 p){vec3 q=fract(vec3(p.xyx)*.1031);q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}
+    float vno(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hs(i),hs(i+vec2(1,0)),f.x),mix(hs(i+vec2(0,1)),hs(i+vec2(1,1)),f.x),f.y);}
+    float fbm(vec2 p){return .5*vno(p)+.3*vno(p*2.03+1.7)+.2*vno(p*4.1+3.1);}`;
+  const HP = '#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\n';
   const prog = glProgram(gl, `attribute vec3 p;attribute vec3 n;attribute vec2 uv;uniform mat4 mvp;varying vec3 vn;varying vec2 vuv;varying vec3 wp;
     void main(){vn=n;vuv=uv;wp=p;gl_Position=mvp*vec4(p,1.);}`,
-    `precision mediump float;uniform sampler2D tex;varying vec3 vn;varying vec2 vuv;${FOG}
-    void main(){vec3 L=normalize(vec3(-.5,.8,-.4));float d=max(dot(normalize(vn),L),0.);gl_FragColor=vec4(haze(texture2D(tex,vuv).rgb*(.5+.62*d)),1.);}`);
+    `${HP}uniform sampler2D tex;uniform float soft;varying vec3 vn;varying vec2 vuv;${FOG}${NOISE}
+    void main(){vec3 L=normalize(vec3(-.5,.8,-.4));float d=max(dot(normalize(vn),L),0.);vec3 c=texture2D(tex,vuv).rgb;
+      if(soft>.5){float b=fbm(wp.xz*26.);c*=.84+.3*b;c=mix(c,c*vec3(1.1,1.07,.84),smoothstep(.55,.8,b)*.6);
+        c*=.92+.13*vno(vec2(wp.x*380.+wp.z*150.,wp.z*70.-wp.x*30.));}
+      gl_FragColor=vec4(haze(c*(.5+.62*d)),1.);}`);
   const vcol = glProgram(gl, `attribute vec3 p;attribute vec3 n;attribute vec3 c;uniform mat4 mvp;varying vec3 vn;varying vec3 vc;varying vec3 wp;
     void main(){vn=n;vc=c;wp=p;gl_Position=mvp*vec4(p,1.);}`,
     `precision mediump float;varying vec3 vn;varying vec3 vc;${FOG}
@@ -2236,7 +2245,7 @@ async function open3D() {
       gl.useProgram(prog);
       const attr = (p, name, buf, n) => { const l = gl.getAttribLocation(p, name); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, n, gl.FLOAT, false, 0, 0); return l; };
       const ls = [attr(prog, 'p', bufs.pos, 3), attr(prog, 'n', bufs.nrm, 3), attr(prog, 'uv', bufs.uv, 2)];
-      gl.uniformMatrix4fv(gl.getUniformLocation(prog, 'mvp'), false, mvp); setFog(prog);
+      gl.uniformMatrix4fv(gl.getUniformLocation(prog, 'mvp'), false, mvp); setFog(prog); gl.uniform1f(gl.getUniformLocation(prog, 'soft'), soft ? 1 : 0);
       gl.bindTexture(gl.TEXTURE_2D, tex); gl.uniform1i(gl.getUniformLocation(prog, 'tex'), 0);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufs.idx); gl.drawElements(gl.TRIANGLES, idx.length, gl.UNSIGNED_SHORT, 0);
       ls.forEach(l => gl.disableVertexAttribArray(l));
