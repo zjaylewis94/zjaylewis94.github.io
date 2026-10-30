@@ -66,6 +66,19 @@ nav.views a.on{color:var(--ink);background:var(--brass)}
 
 /* layout */
 .app{display:flex;height:calc(100% - var(--hdr))}
+/* Type tabs: one tab per card type (plus All). The sidebar shows only the chosen type's tree. Shown on Wiki, Story and Graph. */
+:root{--tabs:42px}
+.typetabs{display:none;height:var(--tabs);align-items:stretch;gap:2px;padding:0 10px;border-bottom:1px solid var(--line);background:var(--glass);
+  -webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);overflow-x:auto;overflow-y:hidden;scrollbar-width:none;position:relative;z-index:19}
+.typetabs::-webkit-scrollbar{display:none}
+body.tabs-on .typetabs{display:flex}
+body.tabs-on .app{height:calc(100% - var(--hdr) - var(--tabs))}
+.typetabs button{flex:none;display:flex;align-items:center;gap:6px;padding:0 12px;font-family:var(--ui);font-weight:600;font-size:13px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--smoke);border-bottom:2px solid transparent;white-space:nowrap}
+.typetabs button:hover{color:var(--paper)}
+.typetabs button.on{color:var(--c,var(--brass));border-bottom-color:var(--c,var(--brass));background:rgba(255,255,255,.03)}
+.typetabs button .ti{font-size:13px}
+.typetabs button .tn{font-size:11px;font-weight:500;color:var(--smoke);background:var(--ink3);border-radius:9px;padding:0 6px;letter-spacing:.03em}
 aside{width:290px;flex:none;border-right:1px solid var(--line);display:flex;flex-direction:column;background:var(--glass);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur)}
 .side-top{padding:10px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line)}
 .side-top .row{display:flex;gap:6px}
@@ -382,6 +395,11 @@ svg.graph text.el{font-family:var(--ui);font-size:10px;fill:var(--brass);paint-o
     justify-content:space-around;padding:6px 6px calc(6px + env(safe-area-inset-bottom));z-index:25}
   nav.views a{flex:1;text-align:center;font-size:13px}
   .app{height:calc(100% - var(--hdr) - 48px - env(safe-area-inset-bottom))}
+  body.tabs-on .app{height:calc(100% - var(--hdr) - var(--tabs) - 48px - env(safe-area-inset-bottom))}
+  body.tabs-on aside{top:calc(var(--hdr) + var(--tabs))}
+  body.tabs-on.side-open .mob-scrim{top:calc(var(--hdr) + var(--tabs))}
+  .typetabs{padding:0 4px}
+  .typetabs button{padding:0 10px;font-size:12.5px}
   aside{position:fixed;top:var(--hdr);bottom:0;left:0;width:86vw;max-width:330px;z-index:30;background:var(--ink2);transform:translateX(-102%);transition:transform .2s}
   body.side-open aside{transform:none}
   body.side-open .mob-scrim{display:block;position:fixed;inset:0;top:var(--hdr);background:rgba(0,0,0,.5);z-index:29}
@@ -407,12 +425,13 @@ svg.graph text.el{font-family:var(--ui);font-size:10px;fill:var(--brass);paint-o
   <div class="search"><input id="q" placeholder="Search the Codex…" autocomplete="off" spellcheck="false"><div class="results hidden" id="results"></div></div>
   <button class="syncbtn" id="syncBtn" title="Sync settings"><span class="dot" id="syncDot"></span><span class="lbl" id="syncLbl">Local</span></button>
 </header>
+<nav class="typetabs" id="typetabs"></nav>
 <div class="app">
   <aside id="side">
     <div class="side-top">
       <button class="btn solid" id="newBtn">+ New card</button>
       <div class="row">
-        <select id="fType"></select>
+        <select id="fType" hidden></select>
         <select id="fStatus">
           <option value="live">Not cut</option><option value="all">Everything</option><option value="draft">Draft</option>
           <option value="canon">Canon</option><option value="v35">v35 · to review</option><option value="cut">Cut</option>
@@ -661,7 +680,17 @@ function initFilters() {
   $('#fType').onchange = e => { ui.fType = e.target.value; saveJSON(UI_KEY, ui); renderList(); if (view() === 'graph') render(); };
   $('#fStatus').onchange = e => { ui.fStatus = e.target.value; saveJSON(UI_KEY, ui); renderList(); if (view() === 'graph') render(); };
 }
+function renderTabs() {
+  const el = $('#typetabs'); if (!el) return;
+  if (!W) { el.innerHTML = ''; return; }
+  const counts = {}; let all = 0;
+  W.cards.forEach(c => { if (passes(c, { fType: 'all', fStatus: ui.fStatus })) { counts[c.type] = (counts[c.type] || 0) + 1; all++; } });
+  const tab = (k, label, icon, color, n) => `<button data-tab="${k}" class="${ui.fType === k ? 'on' : ''}"${color ? ` style="--c:${color}"` : ''}>${icon ? `<span class="ti">${icon}</span>` : ''}${label}<span class="tn">${n}</span></button>`;
+  el.innerHTML = tab('all', 'All', '', '', all) + Object.entries(TYPES).filter(([k]) => counts[k] || ui.fType === k).map(([k, t]) => tab(k, t.plural, t.icon, t.color, counts[k] || 0)).join('');
+  const on = el.querySelector('.on'); if (on && (on.offsetLeft < el.scrollLeft || on.offsetLeft + on.offsetWidth > el.scrollLeft + el.clientWidth)) el.scrollLeft = on.offsetLeft - 40;
+}
 function renderList() {
+  renderTabs();
   if (!W) { $('#list').innerHTML = ''; return; }
   const cur = route().id;
   const shown = W.cards.filter(c => passes(c));
@@ -718,6 +747,9 @@ function render() {
   close3D();
   if (mapEditing() && (r.v !== 'map' || (r.id && r.id !== M.map.id))) exitEdit(true);
   document.querySelectorAll('#views a').forEach(a => a.classList.toggle('on', a.dataset.v === view()));
+  document.body.classList.toggle('tabs-on', !!W && ['wiki', 'story', 'graph'].includes(view()));
+  const rc = r.v === 'card' && r.id && W && card(r.id);
+  if (rc && ui.fType !== 'all' && rc.type !== ui.fType) { ui.fType = rc.type; $('#fType').value = ui.fType; saveJSON(UI_KEY, ui); }
   renderList(); applyBg();
   if (!W) return renderWelcome();
   if (r.v === 'card' && r.id && card(r.id)) return editing && editing.id === r.id ? renderEdit(card(r.id)) : renderCard(card(r.id));
@@ -2705,6 +2737,14 @@ document.addEventListener('click', async e => {
   if (t.closest('.results [data-id]')) { return openCard(t.closest('[data-id]').dataset.id); }
   const nw = t.closest('[data-new]');
   if (nw) return pickType('New card: ' + nw.dataset.new, ty => newCard(ty, nw.dataset.new));
+  const tb = t.closest('[data-tab]');
+  if (tb) {
+    ui.fType = tb.dataset.tab; $('#fType').value = ui.fType; saveJSON(UI_KEY, ui); renderList();
+    if (view() === 'graph') render();
+    else if (matchMedia('(max-width:820px)').matches) document.body.classList.add('side-open');   // phones: show the list
+    $('#list').scrollTop = 0;
+    return;
+  }
   const jp = t.closest('[data-jump]');
   if (jp) { const h = document.getElementById(jp.dataset.jump); if (h) h.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
   const fg = t.closest('[data-foldgrp]');
