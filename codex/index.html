@@ -333,6 +333,7 @@ svg.graph text.el{font-family:var(--ui);font-size:10px;fill:var(--brass);paint-o
 #mauto,#mpaint,#mcaps,#mshade,#mdeco,#mvec{position:absolute;left:0;top:0}
 #mauto,#mcaps,#mshade,#mdeco{pointer-events:none}
 .v3d{position:absolute;inset:0;z-index:7;background:var(--ink)}
+.v3d.soft{background:linear-gradient(#5f88a6,#9fbccd 55%,#b9cfdb)}
 #c3d{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
 .mapstage img{position:absolute;left:0;top:0}
 #mvec{overflow:visible}
@@ -1259,7 +1260,8 @@ const PAINTS = { grass: '#7fae4f', farmland: '#c9b45a', forest: '#3f7a3a', pine:
 const TREE_PAINTS = { forest: 'round', pine: 'pine', jungle: 'round' };
 // Map look: stepped "papercraft" terraces with contour lines, colour by height (beach → grass → rock → snow), trees on forest paint.
 // Auto colour starts off on maps with uploaded art so it doesn't cover the drawing.
-const mapStyle = m => Object.assign({ terraces: true, auto: !m.img, trees: true }, m.style || {});
+// "vvd look" (soft) is the other look: smooth hills, and in 3D an open ocean with shallows, surf and haze. It turns terraces off.
+const mapStyle = m => Object.assign({ terraces: true, auto: !m.img, trees: true, soft: false }, m.style || {});
 const TERRACE_N = 10;
 function terrace(h) {
   if (h <= 0) return h;
@@ -1671,9 +1673,12 @@ function mapAct(a, el) {
     case 'lcolor': snapUndo(); it.color = v; touchMap(); return select(M.sel);
     case 'lelev': snapUndo(); it.elev = !it.elev; touchMap(); return select(M.sel);
     case 'style': {
-      const st = mapStyle(M.map); st[v] = !st[v]; M.map.style = st; touchMap();
+      const st = mapStyle(M.map); st[v] = !st[v];
+      if (v === 'soft' && st.soft) st.terraces = false;   // the two looks don't mix
+      if (v === 'terraces' && st.terraces) st.soft = false;
+      M.map.style = st; touchMap();
       drawShade(); drawDeco(); drawTools();
-      if (V3) { V3.buildMesh(); V3.retex(); el.classList.toggle('on', st[v]); }
+      if (V3) { V3.buildMesh(); V3.retex(); V3.wrap.querySelectorAll('[data-act="m-style"]').forEach(b => b.classList.toggle('on', !!st[b.dataset.v])); }
       return;
     }
     case 'link': return pickCard({ title: 'Link this zone to…', onPick: id => { it.card = id; if (!it.name) it.name = card(id).title; touchMap(); select(M.sel); } });
@@ -1916,7 +1921,7 @@ function drawShade() {
 }
 function styleButtons() {
   const st = mapStyle(M.map);
-  return [['terraces', 'Terraces'], ['auto', 'Auto colour'], ['trees', 'Trees']]
+  return [['soft', 'vvd look'], ['terraces', 'Terraces'], ['auto', 'Auto colour'], ['trees', 'Trees']]
     .map(([k, l]) => `<button class="btn small${st[k] ? ' on' : ''}" data-act="m-style" data-v="${k}">${l}</button>`).join('');
 }
 // Trees: sample the paint layer on a jittered grid and keep spots painted forest, pine or jungle.
@@ -2113,20 +2118,37 @@ async function open3D() {
   $('#mstage').appendChild(wrap);
   const cv = $('#c3d'), gl = cv.getContext('webgl', { antialias: true });
   if (!gl) { wrap.remove(); return toast('This browser can’t show 3D (WebGL is off).', 4000); }
-  const prog = glProgram(gl, `attribute vec3 p;attribute vec3 n;attribute vec2 uv;uniform mat4 mvp;varying vec3 vn;varying vec2 vuv;
-    void main(){vn=n;vuv=uv;gl_Position=mvp*vec4(p,1.);}`,
-    `precision mediump float;uniform sampler2D tex;varying vec3 vn;varying vec2 vuv;
-    void main(){vec3 L=normalize(vec3(-.5,.8,-.4));float d=max(dot(normalize(vn),L),0.);gl_FragColor=vec4(texture2D(tex,vuv).rgb*(.5+.62*d),1.);}`);
-  const vcol = glProgram(gl, `attribute vec3 p;attribute vec3 n;attribute vec3 c;uniform mat4 mvp;varying vec3 vn;varying vec3 vc;
-    void main(){vn=n;vc=c;gl_Position=mvp*vec4(p,1.);}`,
-    `precision mediump float;varying vec3 vn;varying vec3 vc;
-    void main(){vec3 L=normalize(vec3(-.5,.8,-.4));float d=max(dot(normalize(vn),L),0.);gl_FragColor=vec4(vc*(.55+.6*d),1.);}`);
+  // Haze (vvd look): colours fade to the horizon colour between fog.x and fog.y from the eye; fog.y = 0 turns it off.
+  const FOG = `uniform vec3 eye;uniform vec2 fog;uniform vec3 fogc;varying vec3 wp;
+    vec3 haze(vec3 c){return fog.y>0.?mix(c,fogc,smoothstep(fog.x,fog.y,distance(wp,eye))):c;}`;
+  const prog = glProgram(gl, `attribute vec3 p;attribute vec3 n;attribute vec2 uv;uniform mat4 mvp;varying vec3 vn;varying vec2 vuv;varying vec3 wp;
+    void main(){vn=n;vuv=uv;wp=p;gl_Position=mvp*vec4(p,1.);}`,
+    `precision mediump float;uniform sampler2D tex;varying vec3 vn;varying vec2 vuv;${FOG}
+    void main(){vec3 L=normalize(vec3(-.5,.8,-.4));float d=max(dot(normalize(vn),L),0.);gl_FragColor=vec4(haze(texture2D(tex,vuv).rgb*(.5+.62*d)),1.);}`);
+  const vcol = glProgram(gl, `attribute vec3 p;attribute vec3 n;attribute vec3 c;uniform mat4 mvp;varying vec3 vn;varying vec3 vc;varying vec3 wp;
+    void main(){vn=n;vc=c;wp=p;gl_Position=mvp*vec4(p,1.);}`,
+    `precision mediump float;varying vec3 vn;varying vec3 vc;${FOG}
+    void main(){vec3 L=normalize(vec3(-.5,.8,-.4));float d=max(dot(normalize(vn),L),0.);gl_FragColor=vec4(haze(vc*(.55+.6*d)),1.);}`);
+  // Open sea (vvd look): colour by depth from a depth texture over the map (deep everywhere off it),
+  // light shallows, and a white surf line where the land meets the water.
+  const sea = glProgram(gl, `attribute vec3 p;uniform mat4 mvp;varying vec3 wp;void main(){wp=p;gl_Position=mvp*vec4(p,1.);}`,
+    `precision mediump float;uniform sampler2D dep;uniform float aspect;${FOG}
+    void main(){vec2 q=vec2(wp.x+.5,wp.z/aspect+.5);float off=max(max(-q.x,q.x-1.),max(-q.y,q.y-1.));
+      float d=max(texture2D(dep,clamp(q,0.,1.)).r,smoothstep(0.,.12,off));
+      vec3 c=mix(vec3(.45,.74,.76),vec3(.14,.34,.48),smoothstep(0.,.45,d));
+      float n=fract(sin(dot(floor(q*260.),vec2(12.9898,78.233)))*43758.5453);
+      c=mix(c,vec3(.94,.97,.96),(1.-smoothstep(.02,.05+.03*n,d))*.9);
+      gl_FragColor=vec4(haze(c),1.);}`);
   const flat = glProgram(gl, `attribute vec3 p;uniform mat4 mvp;void main(){gl_Position=mvp*vec4(p,1.);}`,
     `precision mediump float;uniform vec4 col;void main(){gl_FragColor=col;}`);
   const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([31, 75, 94, 255]));
+  const dep = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, dep);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  let SF = null;   // vvd-look heights and sea depth, made the first time they're needed
   const aspect = m.h / m.w, gk = Math.min(1, 240 / Math.max(M.hw, M.hh));   // ≤ 240×240 vertices keeps 16-bit indices
   const cols = Math.max(2, Math.round(M.hw * gk)), rows = Math.max(2, Math.round(M.hh * gk));
   const bufs = { pos: gl.createBuffer(), nrm: gl.createBuffer(), uv: gl.createBuffer(), idx: gl.createBuffer(), water: gl.createBuffer(),
@@ -2142,10 +2164,18 @@ async function open3D() {
   const wy = -0.002;
   gl.bindBuffer(gl.ARRAY_BUFFER, bufs.water);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-.5, wy, -aspect / 2, .5, wy, -aspect / 2, -.5, wy, aspect / 2, .5, wy, aspect / 2]), gl.STATIC_DRAW);
+  bufs.sea = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, bufs.sea);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-9, wy, -9, 9, wy, -9, -9, wy, 9, 9, wy, 9]), gl.STATIC_DRAW);
   function buildMesh() {
     const ex = (ui.ex3d || 1) * 0.12, pos = new Float32Array(cols * rows * 3), nrm = new Float32Array(cols * rows * 3);
     const T = mapStyle(m).terraces ? terrace : (v => v);
-    const hAt = (i, j) => { const x = i / (cols - 1) * (M.hw - 1), y = j / (rows - 1) * (M.hh - 1); return T(sampleBil(x, y)) * ex; };
+    if (mapStyle(m).soft && !SF) {
+      SF = softField();
+      gl.bindTexture(gl.TEXTURE_2D, dep); gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, M.hw, M.hh, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, SF.dep);
+    }
+    const A = mapStyle(m).soft ? SF.Hs : M.H;
+    const hAt = (i, j) => { const x = i / (cols - 1) * (M.hw - 1), y = j / (rows - 1) * (M.hh - 1); return T(sampleBil(x, y, A)) * ex; };
     for (let j = 0, o = 0; j < rows; j++) for (let i = 0; i < cols; i++, o += 3) { pos[o] = i / (cols - 1) - .5; pos[o + 1] = hAt(i, j); pos[o + 2] = (j / (rows - 1) - .5) * aspect; }
     const sx = 1 / (cols - 1), sz = aspect / (rows - 1);
     for (let j = 0, o = 0; j < rows; j++) for (let i = 0; i < cols; i++, o += 3) {
@@ -2167,12 +2197,14 @@ async function open3D() {
       }
     };
     const range = (n, f) => Array.from({ length: n }, (_, k) => f(k));
-    side(range(cols, i => i), [0, 0, -1]); side(range(cols, i => (rows - 1) * cols + i).reverse(), [0, 0, 1]);
-    side(range(rows, j => j * cols).reverse(), [-1, 0, 0]); side(range(rows, j => j * cols + cols - 1), [1, 0, 0]);
+    if (!mapStyle(m).soft) {   // the vvd look sits in open sea, so no slab
+      side(range(cols, i => i), [0, 0, -1]); side(range(cols, i => (rows - 1) * cols + i).reverse(), [0, 0, 1]);
+      side(range(rows, j => j * cols).reverse(), [-1, 0, 0]); side(range(rows, j => j * cols + cols - 1), [1, 0, 0]);
+    }
     if (mapStyle(m).trees) {
       const greens = { round: [[0.18, 0.42, 0.18], [0.3, 0.57, 0.25]], pine: [[0.12, 0.29, 0.17], [0.19, 0.42, 0.24]] };
       for (const t of treePoints()) {
-        const hx = Math.min(M.hw - 1, t.x / H_SCALE), hy = Math.min(M.hh - 1, t.y / H_SCALE), y0 = T(sampleBil(hx, hy)) * ex;
+        const hx = Math.min(M.hw - 1, t.x / H_SCALE), hy = Math.min(M.hh - 1, t.y / H_SCALE), y0 = T(sampleBil(hx, hy, A)) * ex;
         if (y0 < 0) continue;
         const cx = t.x / m.w - .5, cz = (t.y / m.h - .5) * aspect, s = 0.85 + t.v * 0.5;
         const r = (t.shape === 'pine' ? 0.0042 : 0.006) * s, hgt = (t.shape === 'pine' ? 0.02 : 0.013) * s, [cA, cB] = greens[t.shape];
@@ -2194,23 +2226,33 @@ async function open3D() {
       if (!V3 || V3.gl !== gl) return;
       const dpr = Math.min(2, devicePixelRatio || 1), w = cv.clientWidth * dpr, h = cv.clientHeight * dpr;
       if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
-      gl.viewport(0, 0, w, h); gl.clearColor(.055, .082, .07, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); gl.enable(gl.DEPTH_TEST);
+      const soft = mapStyle(m).soft; wrap.classList.toggle('soft', soft);
+      gl.viewport(0, 0, w, h); if (soft) gl.clearColor(0, 0, 0, 0); else gl.clearColor(.055, .082, .07, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); gl.enable(gl.DEPTH_TEST);
       const eye = [Math.cos(cam.pitch) * Math.sin(cam.yaw) * cam.dist, Math.sin(cam.pitch) * cam.dist, Math.cos(cam.pitch) * Math.cos(cam.yaw) * cam.dist];
       const mvp = mat4Mul(mat4Persp(0.8, w / h, 0.01, 20), mat4LookAt(eye, [0, 0, 0], [0, 1, 0]));
+      const setFog = p => { gl.uniform3fv(gl.getUniformLocation(p, 'eye'), eye); gl.uniform3fv(gl.getUniformLocation(p, 'fogc'), [.72, .81, .86]);
+        gl.uniform2fv(gl.getUniformLocation(p, 'fog'), soft ? [cam.dist + .5, cam.dist + 6] : [0, 0]); };
       gl.useProgram(prog);
       const attr = (p, name, buf, n) => { const l = gl.getAttribLocation(p, name); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, n, gl.FLOAT, false, 0, 0); return l; };
       const ls = [attr(prog, 'p', bufs.pos, 3), attr(prog, 'n', bufs.nrm, 3), attr(prog, 'uv', bufs.uv, 2)];
-      gl.uniformMatrix4fv(gl.getUniformLocation(prog, 'mvp'), false, mvp);
+      gl.uniformMatrix4fv(gl.getUniformLocation(prog, 'mvp'), false, mvp); setFog(prog);
       gl.bindTexture(gl.TEXTURE_2D, tex); gl.uniform1i(gl.getUniformLocation(prog, 'tex'), 0);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufs.idx); gl.drawElements(gl.TRIANGLES, idx.length, gl.UNSIGNED_SHORT, 0);
       ls.forEach(l => gl.disableVertexAttribArray(l));
       if (extraCount) {
-        gl.useProgram(vcol); gl.uniformMatrix4fv(gl.getUniformLocation(vcol, 'mvp'), false, mvp);
+        gl.useProgram(vcol); gl.uniformMatrix4fv(gl.getUniformLocation(vcol, 'mvp'), false, mvp); setFog(vcol);
         gl.bindBuffer(gl.ARRAY_BUFFER, bufs.extra);
         const el = ['p', 'n', 'c'].map((nm, k) => { const l = gl.getAttribLocation(vcol, nm); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, 3, gl.FLOAT, false, 36, k * 12); return l; });
         gl.drawArrays(gl.TRIANGLES, 0, extraCount); el.forEach(l => gl.disableVertexAttribArray(l));
       }
-      if (ui.water3d !== false) {
+      if (ui.water3d !== false && soft) {
+        gl.useProgram(sea); const l = attr(sea, 'p', bufs.sea, 3);
+        gl.uniformMatrix4fv(gl.getUniformLocation(sea, 'mvp'), false, mvp); setFog(sea);
+        gl.uniform1f(gl.getUniformLocation(sea, 'aspect'), aspect);
+        gl.bindTexture(gl.TEXTURE_2D, dep); gl.uniform1i(gl.getUniformLocation(sea, 'dep'), 0);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); gl.disableVertexAttribArray(l);
+      } else if (ui.water3d !== false) {
         gl.useProgram(flat); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         const l = attr(flat, 'p', bufs.water, 3);
         gl.uniformMatrix4fv(gl.getUniformLocation(flat, 'mvp'), false, mvp);
@@ -2244,9 +2286,45 @@ async function open3D() {
   cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
   cv.addEventListener('wheel', e => { e.preventDefault(); cam.dist = Math.max(.35, Math.min(4, cam.dist * Math.exp(e.deltaY * .0012))); draw(); }, { passive: false });
 }
-function sampleBil(x, y) {
-  const { H, hw, hh } = M, x0 = Math.floor(x), y0 = Math.floor(y), x1 = Math.min(hw - 1, x0 + 1), y1 = Math.min(hh - 1, y0 + 1), ax = x - x0, ay = y - y0;
+function sampleBil(x, y, H = M.H) {
+  const { hw, hh } = M, x0 = Math.floor(x), y0 = Math.floor(y), x1 = Math.min(hw - 1, x0 + 1), y1 = Math.min(hh - 1, y0 + 1), ax = x - x0, ay = y - y0;
   return (H[y0 * hw + x0] * (1 - ax) + H[y0 * hw + x1] * ax) * (1 - ay) + (H[y1 * hw + x0] * (1 - ax) + H[y1 * hw + x1] * ax) * ay;
+}
+// vvd look: land is anything raised or painted (except water paint). Land is lifted just above the sea and everything
+// else sunk below it, so a painted island at sea level still rises out of open water. Sea depth comes from how far
+// you dug, or how far from the coast you are, so the shallows and surf follow the shoreline.
+function softField() {
+  const { H, hw, hh } = M, n = hw * hh, land = new Float32Array(n), wc = hexRGB(PAINTS.water), p = $('#mpaint');
+  let pd = null;
+  if (p && p.width > 1) { const c = document.createElement('canvas'); c.width = hw; c.height = hh; const x = c.getContext('2d'); x.drawImage(p, 0, 0, hw, hh); pd = x.getImageData(0, 0, hw, hh).data; }
+  for (let i = 0, o = 0; i < n; i++, o += 4) {
+    const painted = pd && pd[o + 3] > 100 && Math.abs(pd[o] - wc[0]) + Math.abs(pd[o + 1] - wc[1]) + Math.abs(pd[o + 2] - wc[2]) > 40;
+    land[i] = H[i] > 0.004 || (painted && H[i] > -0.004) ? 1 : 0;
+  }
+  let near = land; const r = Math.max(2, Math.round(Math.max(hw, hh) / 40));
+  for (let k = 0; k < 3; k++) near = boxBlur(near, hw, hh, r);
+  const Hs = new Float32Array(n), dep = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    if (land[i]) { Hs[i] = Math.max(H[i], 0.006); continue; }
+    Hs[i] = Math.min(H[i], -0.03);
+    const x = i % hw, coast = (x > 0 && land[i - 1]) || (x < hw - 1 && land[i + 1]) || land[i - hw] || land[i + hw];
+    if (!coast) dep[i] = Math.min(255, Math.max(-H[i] / -H_MIN, 0.08 + 0.7 * Math.max(0, 1 - near[i] * 1.8)) * 255);   // coast stays 0: surf
+  }
+  return { Hs, dep };
+}
+function boxBlur(a, w, h, r) {
+  const t = new Float32Array(a.length), o = new Float32Array(a.length), k = 1 / (2 * r + 1), cx = x => Math.min(w - 1, Math.max(0, x)), cy = y => Math.min(h - 1, Math.max(0, y));
+  for (let y = 0; y < h; y++) {
+    const row = y * w; let s = 0;
+    for (let x = -r; x <= r; x++) s += a[row + cx(x)];
+    for (let x = 0; x < w; x++) { t[row + x] = s * k; s += a[row + cx(x + r + 1)] - a[row + cx(x - r)]; }
+  }
+  for (let x = 0; x < w; x++) {
+    let s = 0;
+    for (let y = -r; y <= r; y++) s += t[cy(y) * w + x];
+    for (let y = 0; y < h; y++) { o[y * w + x] = s * k; s += t[cy(y + r + 1) * w + x] - t[cy(y - r) * w + x]; }
+  }
+  return o;
 }
 function close3D() {
   if (!V3) return;
