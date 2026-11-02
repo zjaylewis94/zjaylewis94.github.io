@@ -8,7 +8,8 @@ It has no data and no sync.
 ## The file
 - `index.html` is the whole site: a single self-contained file, vanilla JS, no build step. Keep it that way.
 - Shelves live in `DEFAULT_BOOKS` in `index.html`. Book fields: `title`, `kind`, `emblem`, `color` (hex), `url`, `h` (spine height px), `lean`.
-- `kind`: `app` (opens `url`), `chat` (a Claude project; no link yet), `soon` (not written yet; faded spine), `private` (kept off the web).
+- `kind`: `app` (opens `url`), `drive` (opens the book's private Library folder in Google Drive, only Zach can open it; used until a book has its own repo), `chat` (a Claude project; no link yet), `soon` (not written yet; faded spine), `private` (kept off the web).
+- `loadBooks()` upgrades devices that saved their own shelves: the `LIVE` and `DRIVE` maps fill in links, and "Army / OCS" is renamed "Army".
 - Subroutine isn't on a shelf. It's the hub plate under the title, matching Zach's notepad, where Subroutine sits above every shelf.
 - "Edit the shelves" saves an override in that browser's localStorage (`archive_books`). That override hides later changes to `DEFAULT_BOOKS` on that device.
 - The page is public. Only titles and links go on it, never private content.
@@ -34,8 +35,9 @@ New repos use underscores (Zach's preference). Older ones keep their names.
 **Raminations** is a planned series of short animated lessons (TikTok / YouTube Shorts) narrated by a mascot, **Rammy**,
 teaching art techniques and track drills. It pulls from both the Teacher and Coaching books.
 
-Current shelves (Sep 28): **Educator** Teaching · Coaching · Raminations (repo link) — **Life Admin** Hybrid Warrior · Cook Book · Life Admin (private) · Army / OCS (chat) — **Art Studio** Steez Bank (soon) · Sketch Book (soon) · Figma Boards — **Genesis** Codex (app, /codex/).
-Army / OCS and Figma Boards aren't on the notepad; they stay until Zach decides. Figma Boards points at figma.com until he gives his board link.
+Current shelves (Nov 2): **Educator** Teaching · Coaching · Raminations (repo link) — **Life Admin** Hybrid Warrior · Cook Book · Life Admin (Drive) · Army (Drive) — **Art Studio** Steez Bank (Drive) · Sketch Book (Drive) · Figma Boards — **Genesis** Codex (app, /codex/).
+The four Drive books open their Library folders: `Life Admin/life_admin (private)` (holds `lifeadmin_book.html`), `Life Admin/army (private)` (`army_book.html` starter + OCS docs), `Art Studio/steez_bank` (`steez-bank.html`), `Art Studio/sketch_book` (`sketch_book.html` starter). Steez Bank's HTML has personal notes and names in its seed, so it can't go on the public site as-is: a public version needs an empty shell with its data in the private repo.
+Army and Figma Boards aren't on the notepad; they stay until Zach decides. Figma Boards points at figma.com until he gives his board link.
 
 Not yet made: Life Admin (private; `lifeadmin_book.html` is in Drive), Sketch Book, and **Steez Bank** (art ideas sorted by medium).
 
