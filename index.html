@@ -205,7 +205,7 @@ var DEFAULT_BOOKS = {
   "Educator": [
     { title:"Teaching",    kind:"app",  emblem:"✜", color:"#e07840", h:234, url:"https://zjaylewis94.github.io/teacher_book/" },
     { title:"Coaching",    kind:"app",  emblem:"⚑", color:"#5cb87a", h:216, url:"https://zjaylewis94.github.io/coaching_book/" },
-    { title:"Raminations", kind:"soon", emblem:"✺", color:"#f4c542", h:204, lean:true },
+    { title:"Raminations", kind:"app",  emblem:"✺", color:"#f4c542", h:204, lean:true, url:"https://github.com/zjaylewis94/Ramination" },
   ],
   "Life Admin": [
     { title:"Hybrid Warrior", kind:"app", emblem:"❖", color:"#e05a5a", h:222, url:"https://zjaylewis94.github.io/hybrid-warrior/" },
@@ -229,7 +229,7 @@ function loadBooks(){
     if(s){
       var b=JSON.parse(s);
       // Books that went live after a device saved its own shelves: open them there too
-      var LIVE={ "Cook Book":"https://zjaylewis94.github.io/cook_book/", "Codex":"https://zjaylewis94.github.io/codex/" };
+      var LIVE={ "Cook Book":"https://zjaylewis94.github.io/cook_book/", "Codex":"https://zjaylewis94.github.io/codex/", "Raminations":"https://github.com/zjaylewis94/Ramination" };
       Object.keys(b).forEach(function(shelf){ (b[shelf]||[]).forEach(function(x){
         if(LIVE[x.title] && (x.kind==='soon' || x.kind==='private') && !x.url){ x.kind='app'; x.url=LIVE[x.title]; }
       }); });
