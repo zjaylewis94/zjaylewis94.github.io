@@ -210,12 +210,12 @@ var DEFAULT_BOOKS = {
   "Life Admin": [
     { title:"Hybrid Warrior", kind:"app", emblem:"❖", color:"#e05a5a", h:222, url:"https://zjaylewis94.github.io/hybrid-warrior/" },
     { title:"Cook Book",   kind:"app",     emblem:"✻", color:"#d9884a", h:208, url:"https://zjaylewis94.github.io/cook_book/" },
-    { title:"Life Admin",  kind:"private", emblem:"⌂", color:"#c9a25e", h:214 },
-    { title:"Army / OCS",  kind:"chat",    emblem:"★", color:"#8a93a8", h:226, lean:true },
+    { title:"Life Admin",  kind:"drive",   emblem:"⌂", color:"#c9a25e", h:214, url:"https://drive.google.com/drive/folders/1i5YsCiNFNuZgEPHfZKEvObH0uUWyf74O" },
+    { title:"Army",        kind:"drive",   emblem:"★", color:"#8a93a8", h:226, lean:true, url:"https://drive.google.com/drive/folders/17-9Nvvp0uCf1NJlnHXQYwjaMIf1bKxCj" },
   ],
   "Art Studio": [
-    { title:"Steez Bank",   kind:"soon", emblem:"✷", color:"#f4a4c0", h:228 },
-    { title:"Sketch Book",  kind:"soon", emblem:"✎", color:"#9ad0ec", h:206 },
+    { title:"Steez Bank",   kind:"drive", emblem:"✷", color:"#f4a4c0", h:228, url:"https://drive.google.com/drive/folders/1JT4HjO5qXhXagEYfhf39A37AQDZeL50v" },
+    { title:"Sketch Book",  kind:"drive", emblem:"✎", color:"#9ad0ec", h:206, url:"https://drive.google.com/drive/folders/1N37y4VRHrLCnQ6uAXR8mYDsA4GOv6ScL" },
     { title:"Figma Boards", kind:"app",  emblem:"◈", color:"#38bcd4", url:"https://figma.com", h:218, lean:true },
   ],
   "Genesis": [
@@ -230,8 +230,13 @@ function loadBooks(){
       var b=JSON.parse(s);
       // Books that went live after a device saved its own shelves: open them there too
       var LIVE={ "Cook Book":"https://zjaylewis94.github.io/cook_book/", "Codex":"https://zjaylewis94.github.io/codex/", "Raminations":"https://github.com/zjaylewis94/Ramination" };
+      // Books with no repo yet open their private Library folder in Drive (Nov 2026)
+      var DRIVE={ "Life Admin":"https://drive.google.com/drive/folders/1i5YsCiNFNuZgEPHfZKEvObH0uUWyf74O", "Army":"https://drive.google.com/drive/folders/17-9Nvvp0uCf1NJlnHXQYwjaMIf1bKxCj",
+                  "Steez Bank":"https://drive.google.com/drive/folders/1JT4HjO5qXhXagEYfhf39A37AQDZeL50v", "Sketch Book":"https://drive.google.com/drive/folders/1N37y4VRHrLCnQ6uAXR8mYDsA4GOv6ScL" };
       Object.keys(b).forEach(function(shelf){ (b[shelf]||[]).forEach(function(x){
+        if(x.title==='Army / OCS') x.title='Army';
         if(LIVE[x.title] && (x.kind==='soon' || x.kind==='private') && !x.url){ x.kind='app'; x.url=LIVE[x.title]; }
+        if(DRIVE[x.title] && !x.url){ x.kind='drive'; x.url=DRIVE[x.title]; }
       }); });
       return b;
     }
@@ -240,7 +245,7 @@ function loadBooks(){
 }
 function saveBooks(b){ try{ localStorage.setItem('archive_books', JSON.stringify(b)); }catch(e){} }
 
-var KIND_LABEL = { app:'open app ↗', chat:'open chat ↗', soon:'coming soon', private:'private' };
+var KIND_LABEL = { app:'open app ↗', drive:'open in Drive ↗', chat:'open chat ↗', soon:'coming soon', private:'private' };
 function openBook(b){
   if(b.kind==='soon'){ flash(b.title + ' — coming soon to the shelf'); return; }
   if(b.kind==='private'){ flash(b.title + ' — private, kept off the web'); return; }
@@ -261,7 +266,7 @@ function buildShelf(name, items){
   items.forEach(function(b){
     // Books with a live address are plain links (iPhone Safari can refuse
     // script-opened tabs); everything else is a button that explains itself.
-    var isLink = b.kind==='app' && !!b.url;
+    var isLink = (b.kind==='app' || b.kind==='drive') && !!b.url;
     var el=document.createElement(isLink ? 'a' : 'button');
     if(isLink){ el.href=b.url; el.target='_blank'; el.rel='noopener'; }
     else { el.type='button'; el.onclick=function(){ openBook(b); }; }
@@ -314,7 +319,7 @@ document.getElementById('cfgLink').onclick=function(e){
   ov.style.cssText='position:fixed;inset:0;z-index:100;background:rgba(8,12,10,.86);display:flex;align-items:center;justify-content:center;padding:22px';
   ov.innerHTML='<div style="background:var(--ink2);border:1px solid var(--brass-dim);border-radius:12px;padding:20px;max-width:640px;width:100%">'+
     '<div style="font-family:Rajdhani,sans-serif;font-weight:700;letter-spacing:2px;color:var(--brass);text-transform:uppercase;font-size:.8rem;margin-bottom:10px">Edit shelves</div>'+
-    '<div style="font-family:DM Mono,monospace;font-size:.66rem;color:var(--smoke);margin-bottom:10px;line-height:1.5">Each book: title, kind ("app" or "chat"), color (hex), emblem, url, optional h (height). Leave url blank for chats you open manually.</div>'+
+    '<div style="font-family:DM Mono,monospace;font-size:.66rem;color:var(--smoke);margin-bottom:10px;line-height:1.5">Each book: title, kind ("app", "drive" or "chat"), color (hex), emblem, url, optional h (height). Leave url blank for chats you open manually.</div>'+
     '<textarea id="cfgTa" spellcheck="false" style="width:100%;height:300px;background:#0c1310;border:1px solid var(--brass-dim);border-radius:8px;color:var(--paper);font-family:DM Mono,monospace;font-size:.72rem;line-height:1.5;padding:12px;outline:none;resize:vertical"></textarea>'+
     '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">'+
       '<button id="cfgReset" style="background:none;border:1px solid var(--brass-dim);color:var(--smoke);border-radius:7px;padding:8px 14px;cursor:pointer;font-family:Rajdhani,sans-serif;font-weight:600;letter-spacing:1px;text-transform:uppercase;font-size:.68rem">Reset to default</button>'+
