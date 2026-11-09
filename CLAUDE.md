@@ -20,7 +20,7 @@ New repos use underscores (Zach's preference). Older ones keep their names.
 |---|---|---|
 | The Archive (this) | `zjaylewis94.github.io` (public) | Front door |
 | Subroutine (planner) | `SUBROUTINE` (public) | Live; its data syncs to the private `subroutine-data` repo |
-| Workout Book | `hybrid-warrior` (public) | Live; opens on today's week from `CYCLE_START` |
+| Proving Grounds (workouts) | `hybrid-warrior` (public) | Live. Renamed from Hybrid Warrior on Nov 9, 2026 (the repo and address kept the old name). Until BCT (Jan 25, 2027) it runs the Road to BCT, four phases: Hybrid Warrior → Black Ops → The Forge → Future Soldier; it opens on the current phase |
 | Teacher Book | `teacher_book` (public) | Live at /teacher_book/. Sync data goes to private `subroutine-data` |
 | Coaching Book | `coaching_book` (public) | **One book, two sections.** `index.html` is a cover page linking `ramona_head_coach.html` (Head Coach HQ) and `sprint_coach_packet_v3.html` (Sprints & Hurdles). Merging them into one app is still to do |
 | Cook Book | `cook_book` (public) | Live at /cook_book/ (Oct 2026): meal plan, recipe catalog, Sunday shopping list. Data in localStorage `cookbook_v1` |
@@ -34,7 +34,7 @@ New repos use underscores (Zach's preference). Older ones keep their names.
 **Raminations** is a planned series of short animated lessons (TikTok / YouTube Shorts) narrated by a mascot, **Rammy**,
 teaching art techniques and track drills. It pulls from both the Teacher and Coaching books.
 
-Current shelves (Sep 28): **Educator** Teaching · Coaching · Raminations (repo link) — **Life Admin** Hybrid Warrior · Cook Book · Life Admin (private) · Army / OCS (chat) — **Art Studio** Steez Bank (soon) · Sketch Book (soon) · Figma Boards — **Genesis** Codex (app, /codex/).
+Current shelves (Sep 28): **Educator** Teaching · Coaching · Raminations (repo link) — **Life Admin** Proving Grounds (was Hybrid Warrior) · Cook Book · Life Admin (private) · Army / OCS (chat) — **Art Studio** Steez Bank (soon) · Sketch Book (soon) · Figma Boards — **Genesis** Codex (app, /codex/).
 Army / OCS and Figma Boards aren't on the notepad; they stay until Zach decides. Figma Boards points at figma.com until he gives his board link.
 
 Not yet made: Life Admin (private; `lifeadmin_book.html` is in Drive), Sketch Book, and **Steez Bank** (art ideas sorted by medium).
